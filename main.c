@@ -48,15 +48,15 @@ typedef struct Node{
     struct Node *parent;
     void **pointers;
     int numOfKeys;
+    //can contain records or innerNodes
     void ** keys;
     bool is_Leaf;
 }Node;
 
-//Not every key has a left and a right Pointer - how to do that?
 typedef struct innerKey{
     double key;
-    void *leftPointer;
-    void *rightPointer;
+    //does the nodes contain the pointers or the keys?
+    void ** pointer;
 }innerNode;
 
 
@@ -66,6 +66,8 @@ Node *Node_new(int nodeSize){
     node->keys = malloc(nodeSize * sizeof(void));
     //always n+1 pointers
     node->pointers = malloc((nodeSize + 1) * sizeof(void));
+    //FRAGE: SOLL MAN SO ZEIGEN DASS DER POINTER NIRGENDSWO HINZEIGT??
+    node->pointers = NULL;
     return node;
 }
 Node *Leaf_new(int nodeSize){
@@ -84,14 +86,14 @@ void Node_destroy(Node *node) {
 typedef struct circularArray{
     serie *data;
     int size;
-    int next_pos;
+    int lastUpdatePosition;
 }CircularArray;
 
 CircularArray *CircularArray_new(int size) {
     CircularArray *array = NULL;
     array = malloc(sizeof(CircularArray));
     array->size = size;
-    array->next_pos = 0;
+    array->lastUpdatePosition = -1;
     array->data = malloc(array->size * sizeof(serie));
     return array;
 }
@@ -117,23 +119,24 @@ BPlusTree *BPlusTree_new(int nodeSize) {
 
 void BPlusTree_destroy(BPlusTree *bPlus) {
     Node_destroy(bPlus->root);
+    //FRAGE: Hier müsste man den Baum durchgehen oder nicht?
     free(bPlus);
 }
 
 
-bool lookup(CircularArray *array, timestamp_t t);
+bool lookup(CircularArray *array, timestamp_t t, double *value);
 void shift(BPlusTree *tree, CircularArray *array, timestamp_t time, double value);
 timestamp_t neighbour(double value, timestamp_t t);
 void serie_update(BPlusTree *tree, CircularArray *array, timestamp_t t, double value);
 void initialize_data(CircularArray *array);
 void initialize_tree(BPlusTree *tree);
-void delete_Leaf(BPlusTree *tree, timestamp_t t, double value);
-void add_Leaf(BPlusTree *tree, timestamp_t t, double value);
+void deleteRecordFromTree(BPlusTree *tree, timestamp_t t, double value);
+void addRecordToTree(BPlusTree *tree, timestamp_t t, double value);
 void newTree(BPlusTree *tree, Record *record);
 Node * findLeaf(BPlusTree *tree, Record *record);
 void insertRecordIntoLeaf(Node *node, Record *record);
 Node * splitAndInsert(BPlusTree *tree, Node *node, Record *record);
-int cut(int length);
+int getSplitPoint(int length);
 Node * insertIntoParent(BPlusTree *tree, Node *oldLeaf, Record *record, Node *newLeaf);
 Node * insertIntoANewRoot(BPlusTree *tree, Node * left, Record *record, Node * right);
 Node * insertIntoNode(BPlusTree *tree, Node * n, int leftIndex, Record *record, Node * right);
@@ -143,9 +146,10 @@ int getLeftIndex(Node * parent, Node * left);
 int main(int argc, const char * argv[]) {
     
     //variable - can be commandLine Input
-    int arraySize = 5;
+    int arraySize =3;
     int treeNodeSize = 3;
     timestamp_t ti = 300;
+    double lookupValue = 0;
     
     CircularArray *array = CircularArray_new(arraySize);
     initialize_data(array);
@@ -156,25 +160,28 @@ int main(int argc, const char * argv[]) {
     shift(tree, array, ti, 300);
     shift(tree, array, 600, 600);
     shift(tree, array, 900, 900);
+    shift(tree, array, 1500, 1500);
+    shift(tree, array, 2100, 2100);
+
  
     
     //test with out of order timestamp : Annahme ankommender Timestamp ist grösser als alle zuvor
-    shift(tree, array, 2100, 2100);
-    shift(tree, array, 2400, 2400);
-    shift(tree, array, 3000, 3000);
+  //  shift(tree, array, 1200, 1200);
+   // shift(tree, array, 2400, 2400);
+ //   shift(tree, array, 3000, 3000);
     
     
-    bool x1 = lookup(array, 300);
-    bool x2 = lookup(array, 600);
-    bool x3 = lookup(array, 900);
-    bool x4 = lookup(array, 2100);
+    bool x1 = lookup(array, 300, &lookupValue);
+    bool x2 = lookup(array, 600, &lookupValue);
+    bool x3 = lookup(array, 1500, &lookupValue);
+    bool x4 = lookup(array, 2100, &lookupValue);
 
     //1 means true
-    printf("\n\nlookup:\n%d\n", x1);
+    printf("\nlookup:\n%d\n", x1);
     printf("%d\n", x2);
     printf("%d\n", x3);
     printf("%d\n", x4);
-//    printf("%fl\n", x5);
+    printf("%fl\n", lookupValue);
     
     printf("Elements in Serie:\n");
 
@@ -191,8 +198,7 @@ int main(int argc, const char * argv[]) {
 
 void shift(BPlusTree *tree, CircularArray *array, timestamp_t time, double value){
     
-    // not yet completely working
-    //add_Leaf(tree, time, value);
+   // addRecordToTree(tree, time, value);
     serie_update(tree, array, time, value);
 
 }
@@ -205,12 +211,12 @@ void shift(BPlusTree *tree, CircularArray *array, timestamp_t time, double value
 //Insert the new leaf's smallest key into the parent node.
 //If the parent is full, split it too, repeat the split process above until a parent is found that need not split.
 //If the root splits, create a new root which has one key and two children.
-void add_Leaf(BPlusTree *tree, timestamp_t time, double value){
+void addRecordToTree(BPlusTree *tree, timestamp_t time, double value){
     
     Record *record = record_new(time, value);
     Node *leaf;
 
-    /* Case: the tree does not exist yet.*/
+    /* Case: the tree does not exist yet*/
     if (tree->root == NULL){
        return newTree(tree, record);
     }
@@ -233,7 +239,7 @@ void add_Leaf(BPlusTree *tree, timestamp_t time, double value){
 
 
 // Finds the place to split a node that is too big into two.
-int cut(int length) {
+int getSplitPoint(int length) {
     if (length % 2 == 0){
         return length/2;
     }
@@ -265,7 +271,7 @@ Node * splitAndInsert(BPlusTree *tree, Node *node, Record *record){
         if (j == insertPoint) j++;
         tempKeys[j] = node->keys[i];
         //pointer from first node are now pointers from the new one
-        tempPointers[j] = node->pointers[i];
+      //  tempPointers[j] = node->pointers[i];
 
     }
     
@@ -273,7 +279,7 @@ Node * splitAndInsert(BPlusTree *tree, Node *node, Record *record){
     tempPointers[j] = record;
 
     newLeaf->numOfKeys = 0;
-    split = cut(tree->nodeSize);
+    split = getSplitPoint(tree->nodeSize);
     
     for (i = 0; i < split; i++) {
         node->keys[i] = tempKeys[i];
@@ -311,33 +317,28 @@ Node * insertIntoParent(BPlusTree *tree, Node *oldLeaf, Record *newRecord, Node 
     
     parent = oldLeaf->parent;
     
-    /* Case: new root. */
+    /* Case: new root*/
     if (parent == NULL)
         return insertIntoANewRoot(tree, oldLeaf, newRecord, newLeaf);
     
-    /* Case: leaf or node. (Remainder of function body.) */
-    
+    /* Case: leaf or node*/
     /* Find the parent's pointer from the old node.*/
     
     leftIndex = getLeftIndex(parent, oldLeaf);
     
     
-    /* Simple case: the new key fits into the node.
-     */
+    /* Case: the new key fits into the node*/
     
     if (parent->numOfKeys < tree->nodeSize)
         return insertIntoNode(tree, parent, leftIndex, newRecord, newLeaf);
     
-    /* Harder case:  split a node in order
-     * to preserve the B+ tree properties.
-     */
+    /* Case:  split a node in order to preserve the B+ tree properties*/
     return splitAndInsert(tree, parent, newRecord);
 
 }
 
 
-/* Helper function used in insert_into_parent
- * to find the index of the parent's pointer to
+/* used in insertIntoParent to find the index of the parent's pointer to
  * the node to the left of the key to be inserted.
  */
 int getLeftIndex(Node * parent, Node * left){
@@ -354,7 +355,6 @@ int getLeftIndex(Node * parent, Node * left){
 
 /* Inserts a new key and pointer to a node
  * into a node into which these can fit
- * without violating the B+ tree properties.
  */
 Node * insertIntoNode(BPlusTree *tree, Node * n,
                         int leftIndex, Record *record, Node * right) {
@@ -392,7 +392,10 @@ void insertRecordIntoLeaf(Node *node, Record *record){
     while (insertPoint < node->numOfKeys && ((Record *)node->keys[insertPoint])->recordKey <= record->recordKey){
         insertPoint++;
     }
+
+    
     //TODO: POINTER HANDLING
+    //updates Pointers
     for (i = node->numOfKeys; i > insertPoint; i--) {
         //node->keys[i] = node->keys[i - 1];
         node->pointers[i] = node->pointers[i - 1];
@@ -400,6 +403,12 @@ void insertRecordIntoLeaf(Node *node, Record *record){
     node->keys[insertPoint] = record;
     //node->pointers[insertPoint] = pointer;
     node->numOfKeys++;
+    
+    //debugging
+    printf("\nElements in the node: ");
+    for(int y = 0; y<node->numOfKeys; y++){
+        printf("%fl ", ((Record *)node->keys[y])->recordKey);
+    }
     
 }
 
@@ -432,7 +441,7 @@ Node * findLeaf(BPlusTree *tree, Record *record){
     return c;
 }
 
-void delete_Leaf(BPlusTree *tree, timestamp_t time, double value){
+void deleteRecordFromTree(BPlusTree *tree, timestamp_t time, double value){
     
 }
 
@@ -456,49 +465,84 @@ void newTree(BPlusTree *tree, Record *record){
 
 void serie_update(BPlusTree *tree, CircularArray *array, timestamp_t newTime, double newValue){
     
+    int newUpdatePosition;
     int length = array->size;
-    int updatePosition = array->next_pos;
-    
-    if(!isfinite(array->data[updatePosition].value) && updatePosition==0){
-        //first Value Insertion - update Position has to be 0
-    }
-    else
-    {
-        int lastUpdatePos = (((updatePosition - 1)%length)+length)%length;
-    
-        printf("\nlast Update Pos was: %d\n", lastUpdatePos);
-        int positionStep;
-        
-        positionStep = (int)(newTime - array->data[lastUpdatePos].time)/timestampDiff;
-        updatePosition = (lastUpdatePos + positionStep)%length;
+    int lastUpdatePosition = array->lastUpdatePosition;
+    timestamp_t minAllowedTime = 0;
 
+    //because after a position cannot be negative
+    if(array->lastUpdatePosition < 0){
+        //Nothing has been added to the circularArray yet
+        array->data[0].value = newValue;
+        array->data[0].time = newTime;
+        array->lastUpdatePosition = 0;
     }
-    
-    //updates expected next position
-    array->next_pos = (updatePosition + 1) % length;
-    
-    timestamp_t timeDelete = array->data[updatePosition].time;
-    double valueDelete = array->data[updatePosition].value;
-    
-    if(isfinite(array->data[updatePosition].value)){
-     //   delete_Leaf(tree, timeDelete, valueDelete);
-    }
-    
-    array->data[updatePosition].time = newTime;
-    array->data[updatePosition].value = newValue;
+
+    else{
+        if((newTime - (array->size - 1) * timestampDiff) <= newTime){
+           minAllowedTime = newTime - (array->size - 1) *timestampDiff;
+        }
+        
+        int positionStep = (int)(newTime - array->data[lastUpdatePosition].time)/timestampDiff;
+        
+        printf("last Update Pos was: %d\n", lastUpdatePosition);
+        
+        for (int i = 0; i<positionStep; i++) {
+            
+            double value = array->data[(lastUpdatePosition+i)%length].value;
+            timestamp_t curTime = array->data[(lastUpdatePosition+i)%length].time;
+            
+            //checks if the time is in the range of the circular Array after the new value is inserted to it
+            //Range is: newTime - (array->size-1) * timeDifference
+            
+            if(curTime < minAllowedTime && isfinite(value)){
+                
+                timestamp_t timeDelete = array->data[(lastUpdatePosition+i)%length].time;
+                double valueDelete = array->data[(lastUpdatePosition+i)%length].value;
+                
+                //deletes the record from the array and the b+tree
+                deleteRecordFromTree(tree, timeDelete, valueDelete);
+                
+        
+                array->data[(lastUpdatePosition+i)%length].value = INFINITY;
+                array->data[(lastUpdatePosition+i)%length].time = INFINITY;
+            }
  
+        }
+        
+        timestamp_t timeDelete = array->data[newUpdatePosition].time;
+        double valueDelete = array->data[newUpdatePosition].value;
+        
+        if(isfinite(valueDelete)){
+            deleteRecordFromTree(tree, timeDelete, valueDelete);
+        }
+        
+        newUpdatePosition = (lastUpdatePosition + positionStep)%length;
+        array->data[newUpdatePosition].time = newTime;
+        array->data[newUpdatePosition].value = newValue;
+        
+        array->lastUpdatePosition = newUpdatePosition;
+        
+        printf("Elements in Serie:\n");
+        for (int i = 0; i < array->size; i++) {
+            printf("%.2fl ", array->data[i].value);
+        }
+        printf("\n");
+    }
 }
 
-bool lookup(CircularArray *array, timestamp_t t){
+bool lookup(CircularArray *array, timestamp_t t, double *value){
     
     //means array has min one record
-    if(isfinite(array->data[0].value)){
+    if(array->lastUpdatePosition>=0){
         
-        int step = (int)(t - array->data[0].time)/timestampDiff;
+        //vom letzten Zeitpunkt ausgehen!!!
+        int step = (int)(t - array->data[array->lastUpdatePosition].time)/timestampDiff;
         //chaining : modulo for negative numbers
-        int pos = ((step%array->size)+array->size)%array->size;
+        int pos = (((array->lastUpdatePosition+step)%array->size)+array->size)%array->size;
         
        if(array->data[pos].time == t){
+           *value = array->data[pos].value;
            return true;
        }
     }
