@@ -2,8 +2,6 @@
 //  main.c
 //  BPlusTree
 //  Created by Melina Mast on 20.03.16.
-//
-
 
 #include <stdlib.h>
 #include <stdio.h>
@@ -11,12 +9,12 @@
 #include <time.h>
 #include <math.h>
 
-
 //maximum number of records:The minimum number of keys per record is 1/2 of the maximum number of keys. For example, if the order of a B+ tree is n, each node (except for the root) must have between n/2 and n keys.For a n-order B+ tree with a height of h:
 //maximum number of keys is n^h
 //minimum number of keys is 2(n/2)^{h-1}.
 
-//TODO BEDEUTUNG NODESIZE VS DEGREE KLÄREN
+
+
 #define timestampDiff 300
 
 //t = type
@@ -51,12 +49,12 @@ typedef struct Node{
     //can contain records or innerNodes
     void ** keys;
     bool is_Leaf;
+    //for leafs
+    struct Node *prev, *next;
 }Node;
 
 typedef struct innerKey{
     double key;
-    //does the nodes contain the pointers or the keys?
-    void ** pointer;
 }innerNode;
 
 
@@ -66,8 +64,6 @@ Node *Node_new(int nodeSize){
     node->keys = malloc(nodeSize * sizeof(void));
     //always n+1 pointers
     node->pointers = malloc((nodeSize + 1) * sizeof(void));
-    //FRAGE: SOLL MAN SO ZEIGEN DASS DER POINTER NIRGENDSWO HINZEIGT??
-    node->pointers = NULL;
     return node;
 }
 Node *Leaf_new(int nodeSize){
@@ -133,14 +129,23 @@ void initialize_tree(BPlusTree *tree);
 void deleteRecordFromTree(BPlusTree *tree, timestamp_t t, double value);
 void addRecordToTree(BPlusTree *tree, timestamp_t t, double value);
 void newTree(BPlusTree *tree, Record *record);
-Node * findLeaf(BPlusTree *tree, Record *record);
+Node * findLeaf(BPlusTree *tree, double key);
 void insertRecordIntoLeaf(Node *node, Record *record);
-Node * splitAndInsert(BPlusTree *tree, Node *node, Record *record);
 int getSplitPoint(int length);
 Node * insertIntoParent(BPlusTree *tree, Node *oldLeaf, Record *record, Node *newLeaf);
 Node * insertIntoANewRoot(BPlusTree *tree, Node * left, Record *record, Node * right);
 Node * insertIntoNode(BPlusTree *tree, Node * n, int leftIndex, Record *record, Node * right);
-int getLeftIndex(Node * parent, Node * left);
+int getLeftPointerPosition(Node * parent, Node * left);
+Node * splitAndInsertIntoInnerNode(BPlusTree *tree, Node * leftNode, int leftIndex, Record *record, Node * rightNode);
+Node * splitAndInsertIntoLeaves(BPlusTree *tree, Node *oldNode, Record *record);
+Record * findRecordandRecordLeaf(BPlusTree *tree, double value);
+Node * deleteEntry(BPlusTree *tree, double value, Node *leaf);
+Node * removeEntryFromTheNode(BPlusTree *tree, double value, Node * leaf);
+Node * adjustTheRoot(BPlusTree *tree);
+Node * mergeNodes(BPlusTree *tree, Node *node, Node *neighbor, int neighborIndex, double key);
+Node * redestributeNodes(BPlusTree *tree, Node *node, Node *neighbor, int neighborIndex, int kIndex, double key);
+int getPointerIndex(Node * node);
+
 
 
 int main(int argc, const char * argv[]) {
@@ -163,14 +168,6 @@ int main(int argc, const char * argv[]) {
     shift(tree, array, 1500, 1500);
     shift(tree, array, 2100, 2100);
 
- 
-    
-    //test with out of order timestamp : Annahme ankommender Timestamp ist grösser als alle zuvor
-  //  shift(tree, array, 1200, 1200);
-   // shift(tree, array, 2400, 2400);
- //   shift(tree, array, 3000, 3000);
-    
-    
     bool x1 = lookup(array, 300, &lookupValue);
     bool x2 = lookup(array, 600, &lookupValue);
     bool x3 = lookup(array, 1500, &lookupValue);
@@ -190,7 +187,7 @@ int main(int argc, const char * argv[]) {
     }
     printf("\n");
     
-   // BPlusTree_destroy(tree);
+    //BPlusTree_destroy(tree);
     CircularArray_destroy(array);
 
     return 0;
@@ -198,43 +195,201 @@ int main(int argc, const char * argv[]) {
 
 void shift(BPlusTree *tree, CircularArray *array, timestamp_t time, double value){
     
-   // addRecordToTree(tree, time, value);
+    addRecordToTree(tree, time, value);
     serie_update(tree, array, time, value);
 
 }
 
-//Insertion
-//Perform a search to determine which leaf node the new key should go into.
-//If the node is not full, insert the new key, done!
-//Otherwise, split the leaf node.
-//Allocate a new leaf node and move half keys to the new node.
-//Insert the new leaf's smallest key into the parent node.
-//If the parent is full, split it too, repeat the split process above until a parent is found that need not split.
-//If the root splits, create a new root which has one key and two children.
+
+
+
+Node * deleteEntry(BPlusTree *tree, double value, Node *node){
+    
+    int minNumberofKeys;
+    Node * neighbor;
+    int neighborIndex, pointerIndex;
+    int kIndex;
+    double key;
+    int capacity;
+    
+    // Remove key and pointer from node.
+    node = removeEntryFromTheNode(tree, value, node);
+    
+    if (node == tree->root)
+        return adjustTheRoot(tree);
+    
+    
+    // deletion from a node below the root
+    //TODO find out split point
+    minNumberofKeys = getSplitPoint(tree->nodeSize + 1);
+
+    if (node->numOfKeys >= minNumberofKeys){
+        return tree->root;
+    }
+    
+    // Find the appropriate neighbor node with which to merge or redestribute.
+    pointerIndex = getPointerIndex(node);
+    neighborIndex = pointerIndex -1;
+    
+    kIndex = pointerIndex - 1 == -1 ? 0 : neighborIndex;
+    key = ((innerNode *)node->parent->keys[kIndex])->key;
+    neighbor = neighborIndex == -1 ? node->parent->pointers[1] : node->parent->pointers[neighborIndex];
+    
+    capacity = tree->nodeSize;
+    
+    
+    //Merge
+    if (neighbor->numOfKeys + node->numOfKeys < capacity)
+        return mergeNodes(tree, node, neighbor, neighborIndex, key);
+    
+    //Redistribution
+    else
+        return redestributeNodes(tree, node, neighbor, neighborIndex, kIndex, key);
+}
+
+Node * mergeNodes(BPlusTree *tree, Node *node, Node *neighbor, int neighborIndex, double key){
+    return node;
+}
+
+Node * redestributeNodes(BPlusTree *tree, Node *node, Node *neighbor, int neighborIndex, int kIndex, double key){
+    return node ;
+}
+
+
+
+//TODO CHECK POINTER
+Node * removeEntryFromTheNode(BPlusTree *tree, double value, Node * node){
+    
+    int i, numPointers;
+    
+    // Remove the key and shift other keys
+    i = 0;
+    while (((innerNode *)node->keys[i])->key != value){
+        i++;
+    }
+    for (++i; i < node->numOfKeys; i++)
+        node->keys[i - 1] = node->keys[i];
+    
+    // Remove the pointer and shift other pointers accordingly.
+    // First determine number of pointers.
+    numPointers = node->numOfKeys+1;
+   
+    //how to handle pointers
+   // while (node->pointers[i] != pointer)
+   //     i++;
+    for (++i; i < numPointers; i++)
+        node->pointers[i - 1] = node->pointers[i];
+    
+    node->numOfKeys--;
+    
+    // Set the other pointers to NULL
+    if (!node->is_Leaf){
+        for (i = node->numOfKeys + 1; i < tree->nodeSize+1; i++){
+            node->pointers[i] = NULL;
+
+        }
+    }
+  
+    return node;
+}
+
+Node * adjustTheRoot(BPlusTree *tree){
+    
+    Node * newRoot;
+    
+    //Key and pointer have already been deleted
+    if (0 < tree->root->numOfKeys){
+        return tree->root;
+    }
+    
+    // If it has a child, promote the first (only) child as the new root.
+    if (!tree->root->is_Leaf) {
+        newRoot = tree->root->pointers[0];
+        newRoot->parent = NULL;
+    }
+    else
+        newRoot = NULL;
+    
+    free(tree->root->keys);
+    free(tree->root->pointers);
+    free(tree->root);
+    
+    //evt nullpointer?
+    tree->root = newRoot;
+    
+    return newRoot;
+    
+}
+
+int getPointerIndex(Node * node ){
+    
+    int i;
+    // Return the index of the key to the the pointer in the parent pointing to n.
+    // If node is not found return -1
+    for (i = 0; i <= node->parent->numOfKeys; i++){
+        if (node->parent->pointers[i] == node){
+            return i;
+        }
+    }
+    return -1;
+}
+
+void deleteRecordFromTree(BPlusTree *tree, timestamp_t time, double value) {
+    
+    Node * keyLeaf;
+    Record * keyRecord;
+    printf("first ADDRESS OF LEAF: %d", (int)&keyLeaf);
+
+    keyLeaf = findLeaf(tree, value);
+    //TODO: check if keyLeaf cannot be addressed thru &
+    keyRecord = findRecordandRecordLeaf(tree, value);
+    
+    if (keyLeaf != NULL && keyRecord != NULL) {
+        tree->root = deleteEntry(tree, value, keyLeaf);
+        free(keyRecord);
+    }
+}
+
+Record * findRecordandRecordLeaf(BPlusTree *tree, double value) {
+    int i = 0;
+    Node * leaf = findLeaf(tree, value);
+    
+    if (leaf == NULL) return NULL;
+    
+    for (i = 0; i < leaf->numOfKeys; i++){
+        
+        if (((Record *)leaf->keys[i])->recordKey == value) break;
+    }
+    if (i == leaf->numOfKeys)
+        return NULL;
+    else
+        return (Record *)leaf->pointers[i];
+
+}
+
+
+/************************* INSERTION **************************************/
+
 void addRecordToTree(BPlusTree *tree, timestamp_t time, double value){
     
     Record *record = record_new(time, value);
     Node *leaf;
 
-    /* Case: the tree does not exist yet*/
+    //the tree does not exist yet
     if (tree->root == NULL){
        return newTree(tree, record);
     }
     
-    /* Case: the tree already exists.
-     * (Rest of function body.)
-     */
-    leaf = findLeaf(tree, record);
+    //the tree already exists
+    leaf = findLeaf(tree, record->recordKey);
     
-    /* Case: leaf has room for key and pointer.
-     */
+    // leaf has room for key and pointer
     if (leaf->numOfKeys < tree->nodeSize) {
         return insertRecordIntoLeaf(leaf, record);
     }
     
-    /* Case: leaf must be split.
-     */
-    splitAndInsert(tree, leaf, record);
+    //leaf must be split
+    splitAndInsertIntoLeaves(tree, leaf, record);
 }
 
 
@@ -248,125 +403,173 @@ int getSplitPoint(int length) {
     }
 }
 
-Node * splitAndInsert(BPlusTree *tree, Node *node, Record *record){
+Node * splitAndInsertIntoLeaves(BPlusTree *tree, Node *oldNode, Record *record){
     
-    Node * newLeaf;
+    Node * newNode;
+    int insertPoint, split, i, j;
+    void **tempKeys;
+    newNode = Leaf_new(tree->nodeSize);
+    
+    tempKeys = malloc(tree->nodeSize * sizeof(void));
+    insertPoint = 0;
+    
+    // <=because of possible duplicates?
+    // calculation of the insertPoint for the new Record: as soon as key is higher insert point is right
+    while (insertPoint < tree->nodeSize && ((Record *)oldNode->keys[insertPoint])->recordKey <= record->recordKey){
+        insertPoint++;
+    }
+    
+    //fills the keys and pointers
+    for (i = 0, j = 0; i < oldNode->numOfKeys; i++, j++) {
+        
+        //if value is entered in the first position: pointers needs to be moved 1 position
+        if (j == insertPoint) j++;
+        //the value where the new record is added is not been filled yet
+        tempKeys[j] = oldNode->keys[i];
+
+    }
+    
+    //enter the record to the right position
+    tempKeys[insertPoint] = record;
+
+    newNode->numOfKeys = 0;
+    split = getSplitPoint(tree->nodeSize);
+    
+    //fill first leaf
+    for (i = 0; i < split; i++) {
+        //goes left (smaller values)
+        oldNode->keys[i] = tempKeys[i];
+        oldNode->numOfKeys++;
+    }
+    
+    //fill second leaf
+    for (j = 0, i = split; i < tree->nodeSize; i++, j++) {
+        newNode->keys[j] = tempKeys[i];
+        newNode->numOfKeys++;
+    }
+    
+    oldNode->next = newNode;
+    newNode->next = oldNode->next;
+    newNode->next->prev = newNode;
+    newNode->prev = oldNode;
+    
+    newNode->parent = oldNode->parent;
+    //the record is on the
+    Record * newRecord = (Record *)newNode->keys[0];
+
+    //free allocated memory of pointers
+    free(tempKeys);
+    
+    return insertIntoParent(tree, oldNode, newRecord, newNode);
+}
+
+Node * insertIntoParent(BPlusTree *tree, Node *oldChild, Record *newRecord, Node *newChild){
+    
+    int pointerPositionToLeftNode;
+    Node *parent;
+    
+    parent = oldChild->parent;
+    
+    //new root
+    if (parent == NULL)
+        return insertIntoANewRoot(tree, oldChild, newRecord, newChild);
+    
+    //Find the parents pointer from the old node
+    pointerPositionToLeftNode = getLeftPointerPosition(parent, oldChild);
+    
+    
+    //the new key fits into the node
+    if (parent->numOfKeys < tree->nodeSize)
+        return insertIntoNode(tree, parent, pointerPositionToLeftNode, newRecord, newChild);
+    
+    //split a node in order to preserve the B+ tree properties*/
+    return splitAndInsertIntoInnerNode(tree, parent, pointerPositionToLeftNode, newRecord, newChild);
+
+}
+
+//Inserts a new key and pointer to a node into a node, then the node's size exceeds the max nodeSize -> split
+Node * splitAndInsertIntoInnerNode(BPlusTree *tree, Node * parent, int leftIndex, Record *record, Node * rightNode) {
+    
+    Node * newNode;
     int insertPoint, split, i, j;
     void **tempKeys;
     void **tempPointers;
     
-    newLeaf = Leaf_new(tree->nodeSize);
+    insertPoint = leftIndex + 1;
+    newNode = Node_new(tree->nodeSize);
     
     tempKeys = malloc(tree->nodeSize * sizeof(void));
     tempPointers = malloc((tree->nodeSize+1) * sizeof(void));
     
-    insertPoint = 0;
-    //<=because of possible duplicates
-    while (insertPoint < tree->nodeSize && ((Record *)node->keys[insertPoint])->recordKey <= record->recordKey){
-        insertPoint++;}
-    
-    
     //fills the keys and pointers
-    for (i = 0, j = 0; i < node->numOfKeys; i++, j++) {
-        if (j == insertPoint) j++;
-        tempKeys[j] = node->keys[i];
-        //pointer from first node are now pointers from the new one
-      //  tempPointers[j] = node->pointers[i];
-
+    for (i = 0, j = 0; i < parent->numOfKeys + 1; i++, j++) {
+        if(j == insertPoint) j++;
+        if(i<parent->numOfKeys){
+          tempKeys[j] = parent->keys[i];}
+        tempPointers[j] = parent->pointers[i];
     }
     
-    tempKeys[insertPoint] = record;
-    tempPointers[j] = record;
-
-    newLeaf->numOfKeys = 0;
+    tempKeys[leftIndex] = record;
+    tempPointers[insertPoint] = rightNode;
+    
+    newNode->numOfKeys = 0;
     split = getSplitPoint(tree->nodeSize);
     
     for (i = 0; i < split; i++) {
-        node->keys[i] = tempKeys[i];
-        node->pointers[i] = tempPointers[i];
-        node->numOfKeys++;
+        parent->keys[i] = tempKeys[i];
+        parent->pointers[i] = tempPointers[i];
+        parent->numOfKeys++;
     }
     
     for (i = split, j = 0; i < tree->nodeSize; i++, j++) {
-        newLeaf->keys[j] = tempKeys[i];
-        newLeaf->pointers[i] = tempPointers[i];
-        newLeaf->numOfKeys++;
+        newNode->keys[j] = tempKeys[i];
+        newNode->pointers[i] = tempPointers[i];
+        newNode->numOfKeys++;
     }
-    //TODO: how to handle the pointes
+    
+    //unused pointers
+    for (i = parent->numOfKeys; i < tree->nodeSize; i++)
+        parent->pointers[i] = NULL;
+    for (i = newNode->numOfKeys; i < tree->nodeSize; i++)
+        newNode->pointers[i] = NULL;
+    
+    newNode->parent = parent->parent;
+    Record * newRecord = (Record *)newNode->keys[0];
+    
     free(tempKeys);
     free(tempPointers);
     
-    newLeaf->pointers[tree->nodeSize+1] = node->pointers[tree->nodeSize+1];
-    node->pointers[tree->nodeSize+1] = newLeaf;
-    
-    for (i = node->numOfKeys; i < tree->nodeSize; i++)
-        node->pointers[i] = NULL;
-    for (i = newLeaf->numOfKeys; i < tree->nodeSize; i++)
-        newLeaf->pointers[i] = NULL;
-    
-    newLeaf->parent = node->parent;
-    Record * newRecord = (Record *)newLeaf->keys[0];
-    
-    return insertIntoParent(tree, node, newRecord, newLeaf);
+    //old node to the left and new Node to the right
+    return insertIntoParent(tree, parent, newRecord, rightNode);
 }
 
-Node * insertIntoParent(BPlusTree *tree, Node *oldLeaf, Record *newRecord, Node *newLeaf){
-    
-    int leftIndex;
-    Node *parent;
-    
-    parent = oldLeaf->parent;
-    
-    /* Case: new root*/
-    if (parent == NULL)
-        return insertIntoANewRoot(tree, oldLeaf, newRecord, newLeaf);
-    
-    /* Case: leaf or node*/
-    /* Find the parent's pointer from the old node.*/
-    
-    leftIndex = getLeftIndex(parent, oldLeaf);
-    
-    
-    /* Case: the new key fits into the node*/
-    
-    if (parent->numOfKeys < tree->nodeSize)
-        return insertIntoNode(tree, parent, leftIndex, newRecord, newLeaf);
-    
-    /* Case:  split a node in order to preserve the B+ tree properties*/
-    return splitAndInsert(tree, parent, newRecord);
-
-}
-
-
-/* used in insertIntoParent to find the index of the parent's pointer to
- * the node to the left of the key to be inserted.
- */
-int getLeftIndex(Node * parent, Node * left){
+//used in insertIntoParent to find the index of the pointer to the node to the left of the key to be inserted
+int getLeftPointerPosition(Node * parent, Node * oldChild){
     
     int leftIndex = 0;
-    
-    while (leftIndex <= parent->numOfKeys &&
-           parent->pointers[leftIndex] != left){
+    //gets the index where the parent shows to the old, known child - after the new one will have the pointer leftIndex + 1
+    while (leftIndex <= parent->numOfKeys && (parent->pointers[leftIndex]) != oldChild){
         leftIndex++;
     }
-        
     return leftIndex;
 }
 
-/* Inserts a new key and pointer to a node
- * into a node into which these can fit
- */
-Node * insertIntoNode(BPlusTree *tree, Node * n,
-                        int leftIndex, Record *record, Node * right) {
-    int i;
-    
-    for (i = n->numOfKeys; i > leftIndex; i--) {
-        n->pointers[i + 1] = n->pointers[i];
-        n->keys[i] = n->keys[i - 1];
+// Inserts a new key and pointer to a node
+Node * insertIntoNode(BPlusTree *tree, Node * parent, int leftIndex, Record *record, Node * newChild) {
+   
+    for (int i = parent->numOfKeys; i > leftIndex; i--) {
+        
+        //moves pointer one right till insertion point
+        parent->pointers[i + 1] = parent->pointers[i];
+        
+        //because index is one too much (numOfKeys > index of last elemement)-> space for the new key
+        parent->keys[i] = parent->keys[i - 1];
+        
     }
-    n->pointers[leftIndex + 1] = right;
-    n->keys[leftIndex] = record;
-    n->numOfKeys++;
+    parent->pointers[leftIndex + 1] = newChild;
+    parent->keys[leftIndex] = record;
+    parent->numOfKeys++;
+    
     return tree->root;
 }
 
@@ -374,13 +577,13 @@ Node * insertIntoANewRoot(BPlusTree *tree, Node * left, Record *record, Node * r
     
     Node * root = Node_new(tree->nodeSize);
     root->keys[0] = record;
-    //kann theoretisch auch mehr pointer haben, hier ist es aber eine neue Root
     root->pointers[0] = left;
     root->pointers[1] = right;
-    root->numOfKeys++;
+    root->numOfKeys = 1;
     root->parent = NULL;
     left->parent = root;
     right->parent = root;
+    tree->root = root;
     return root;
 }
 
@@ -389,65 +592,62 @@ void insertRecordIntoLeaf(Node *node, Record *record){
     int i, insertPoint;
     
     insertPoint = 0;
-    while (insertPoint < node->numOfKeys && ((Record *)node->keys[insertPoint])->recordKey <= record->recordKey){
+    while (insertPoint < node->numOfKeys && ((Record *)node->keys[insertPoint])->recordKey < record->recordKey){
         insertPoint++;
     }
-
-    
-    //TODO: POINTER HANDLING
-    //updates Pointers
+   
+    //updates Keys
     for (i = node->numOfKeys; i > insertPoint; i--) {
-        //node->keys[i] = node->keys[i - 1];
-        node->pointers[i] = node->pointers[i - 1];
+        //keys are moved one right to make space for new record
+        node->keys[i] = node->keys[i - 1];
     }
+    
+    //no pointers necassary to update because node is directly inserted
     node->keys[insertPoint] = record;
-    //node->pointers[insertPoint] = pointer;
     node->numOfKeys++;
     
     //debugging
     printf("\nElements in the node: ");
-    for(int y = 0; y<node->numOfKeys; y++){
+    for(int y = 0; y< node->numOfKeys; y++){
         printf("%fl ", ((Record *)node->keys[y])->recordKey);
     }
     
 }
 
-Node * findLeaf(BPlusTree *tree, Record *record){
+Node * findLeaf(BPlusTree *tree, double key){
     int i = 0;
     Node * c = tree->root;
     if (c == NULL) {
         return c;
     }
     while (!c->is_Leaf) {
+        
         for (i = 0; i < c->numOfKeys - 1; i++){
             printf("%fl ", ((innerNode *)c->keys[i])->key);
         }
             i = 0;
             while (i < c->numOfKeys) {
-                //key is bigger or equal to the already added keys in c
-                if (record->recordKey >= ((innerNode *)c->keys[i])->key) i++;
+                
+                //key is bigger -> search again
+                if (key >= ((innerNode *)c->keys[i])->key) i++;
+                
+                // key is smaller -> go to this pointer
                 else break;
         }
             printf("%d ->\n", i);
+        
+            //new lookup node
             c = (Node *)c->pointers[i];
     }
     
     //debugging
     printf("Leaf [");
     for (i = 0; i < c->numOfKeys; i++){
-            printf("%fl ", ((Record *)c->keys[i])->recordKey);}
+     //       printf("%fl ", ((Record *)c->keys[i])->recordKey);
+    }
     
     //leaf found
     return c;
-}
-
-void deleteRecordFromTree(BPlusTree *tree, timestamp_t time, double value){
-    
-}
-
-
-void searchTree(BPlusTree *tree, timestamp_t time, double value){
-    
 }
 
 void newTree(BPlusTree *tree, Record *record){
@@ -460,8 +660,7 @@ void newTree(BPlusTree *tree, Record *record){
 
 
 
-/*************************CIRCULAR ARRAY********************/
-
+/************************* CIRCULAR ARRAY ********************************************/
 
 void serie_update(BPlusTree *tree, CircularArray *array, timestamp_t newTime, double newValue){
     
