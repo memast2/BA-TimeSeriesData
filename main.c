@@ -700,7 +700,7 @@ void serie_update(BPlusTree *tree, CircularArray *array, timestamp_t newTime, do
                 double valueDelete = array->data[(lastUpdatePosition+i)%length].value;
                 
                 //deletes the record from the array and the b+tree
-                deleteRecordFromTree(tree, timeDelete, valueDelete);
+                //deleteRecordFromTree(tree, timeDelete, valueDelete);
                 
         
                 array->data[(lastUpdatePosition+i)%length].value = INFINITY;
