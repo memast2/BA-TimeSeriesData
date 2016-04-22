@@ -194,8 +194,8 @@ int main(int argc, const char * argv[]) {
 }
 
 void shift(BPlusTree *tree, CircularArray *array, timestamp_t time, double value){
-    
-    addRecordToTree(tree, time, value);
+  // TODO
+  //  addRecordToTree(tree, time, value);
     serie_update(tree, array, time, value);
 
 }
@@ -713,7 +713,8 @@ void serie_update(BPlusTree *tree, CircularArray *array, timestamp_t newTime, do
         double valueDelete = array->data[newUpdatePosition].value;
         
         if(isfinite(valueDelete)){
-            deleteRecordFromTree(tree, timeDelete, valueDelete);
+        //TODO
+        //  deleteRecordFromTree(tree, timeDelete, valueDelete);
         }
         
         newUpdatePosition = (lastUpdatePosition + positionStep)%length;
