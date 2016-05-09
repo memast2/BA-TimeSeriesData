@@ -14,7 +14,6 @@
 //minimum number of keys is 2(n/2)^{h-1}.
 
 
-
 #define timestampDiff 300
 
 //t = type
@@ -145,7 +144,7 @@ Node * adjustTheRoot(BPlusTree *tree);
 Node * mergeNodes(BPlusTree *tree, Node *node, Node *neighbor, int neighborIndex, double key);
 Node * redestributeNodes(BPlusTree *tree, Node *node, Node *neighbor, int neighborIndex, int kIndex, double key);
 int getPointerIndex(Node * node);
-
+void printTree(BPlusTree *tree);
 
 
 int main(int argc, const char * argv[]) {
@@ -165,8 +164,14 @@ int main(int argc, const char * argv[]) {
     shift(tree, array, ti, 300);
     shift(tree, array, 600, 600);
     shift(tree, array, 900, 900);
+    //not included in the serie
+    shift(tree, array, 500, 500);
+
     shift(tree, array, 1500, 1500);
+    //printTree(tree);
+
     shift(tree, array, 2100, 2100);
+
 
     bool x1 = lookup(array, 300, &lookupValue);
     bool x2 = lookup(array, 600, &lookupValue);
@@ -187,6 +192,8 @@ int main(int argc, const char * argv[]) {
     }
     printf("\n");
     
+  //  printTree(tree);
+    
     //BPlusTree_destroy(tree);
     CircularArray_destroy(array);
 
@@ -194,10 +201,28 @@ int main(int argc, const char * argv[]) {
 }
 
 void shift(BPlusTree *tree, CircularArray *array, timestamp_t time, double value){
-  // TODO
-  //  addRecordToTree(tree, time, value);
-    serie_update(tree, array, time, value);
+    
+    //just new values are added to the tree and to the circular array
+    if(array->data[array->lastUpdatePosition].time >= time){
+        addRecordToTree(tree, time, value);
+        serie_update(tree, array, time, value);
+    }
+}
 
+void printTree(BPlusTree *tree){
+    
+    printf("\nroot: ");
+    for(int i=0; i<tree->root->numOfKeys; i++){
+        printf("%fl ",((innerNode *)tree->root->keys[i])->key);
+    }
+    printf("\n first level: ");
+    Node * node = tree->root->pointers[0];
+    if(node->is_Leaf != false){
+        for(int i=0; i<node->numOfKeys; i++){
+            //TODO BUGFIX NUM OF KEYS IS TOO HIGH and child is wrong
+            printf("%fl ",((innerNode *)node->keys[0])->key);
+        }
+     }
 }
 
 
@@ -678,9 +703,8 @@ void serie_update(BPlusTree *tree, CircularArray *array, timestamp_t newTime, do
     }
 
     else{
-        if((newTime - (array->size - 1) * timestampDiff) <= newTime){
-           minAllowedTime = newTime - (array->size - 1) *timestampDiff;
-        }
+        
+        minAllowedTime = newTime - (array->size - 1) * timestampDiff;
         
         int positionStep = (int)(newTime - array->data[lastUpdatePosition].time)/timestampDiff;
         
@@ -688,23 +712,21 @@ void serie_update(BPlusTree *tree, CircularArray *array, timestamp_t newTime, do
         
         for (int i = 0; i<positionStep; i++) {
             
-            double value = array->data[(lastUpdatePosition+i)%length].value;
-            timestamp_t curTime = array->data[(lastUpdatePosition+i)%length].time;
+            int nextUpdatePosition = (lastUpdatePosition+i)%length;
+            double value = array->data[nextUpdatePosition].value;
+            timestamp_t curTime = array->data[nextUpdatePosition].time;
             
             //checks if the time is in the range of the circular Array after the new value is inserted to it
             //Range is: newTime - (array->size-1) * timeDifference
             
+            // curTime is not always < minAllowedTime; minTime is the minimumAllowed Time which can stay in the serie, The other entries have to be deleted
             if(curTime < minAllowedTime && isfinite(value)){
                 
-                timestamp_t timeDelete = array->data[(lastUpdatePosition+i)%length].time;
-                double valueDelete = array->data[(lastUpdatePosition+i)%length].value;
-                
                 //deletes the record from the array and the b+tree
-                //deleteRecordFromTree(tree, timeDelete, valueDelete);
+                deleteRecordFromTree(tree, curTime, value);
                 
-        
-                array->data[(lastUpdatePosition+i)%length].value = INFINITY;
-                array->data[(lastUpdatePosition+i)%length].time = INFINITY;
+                array->data[nextUpdatePosition].value = INFINITY;
+                array->data[nextUpdatePosition].time = INFINITY;
             }
  
         }
@@ -713,8 +735,7 @@ void serie_update(BPlusTree *tree, CircularArray *array, timestamp_t newTime, do
         double valueDelete = array->data[newUpdatePosition].value;
         
         if(isfinite(valueDelete)){
-        //TODO
-        //  deleteRecordFromTree(tree, timeDelete, valueDelete);
+            deleteRecordFromTree(tree, timeDelete, valueDelete);
         }
         
         newUpdatePosition = (lastUpdatePosition + positionStep)%length;
