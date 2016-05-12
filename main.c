@@ -167,7 +167,7 @@ int main(int argc, const char * argv[]) {
     shift(tree, array, 600, 600);
     shift(tree, array, 900, 900);
     printTree(tree);
-    shift(tree, array, 1500, 1500);
+    shift(tree, array, 1200, 1200);
     printTree(tree);
 
     shift(tree, array, 2100, 2100);
@@ -192,8 +192,7 @@ int main(int argc, const char * argv[]) {
         printf("%.2fl ", array->data[i].value);
     }
     printf("\n");
-    
-  //  printTree(tree);
+
     
     //BPlusTree_destroy(tree);
    // CircularArray_destroy(array);
@@ -223,7 +222,8 @@ void printTree(BPlusTree *tree){
         printf("\n first level: ");
     for(int i = 0; i< tree->root->numOfKeys+1;i++){
         if(NULL != tree->root->pointers[i]){
-            printf("\nNode in level: %d ", i);
+            Node * node = tree->root->pointers[i];
+            printf("\n Node in level: %d ", i);
             for(int j = 0; j< ((Node *)tree->root->pointers[i])->numOfKeys; j++){
                 printf("%fl ",((Record *)((Node *)tree->root->pointers[i])->keys[j])->recordKey);
             }
@@ -401,7 +401,7 @@ Record * findRecordandRecordLeaf(BPlusTree *tree, double value) {
 }
 
 
-/************************* INSERTION **************************************/
+/************************************* INSERTION **************************************/
 
 void addRecordToTree(BPlusTree *tree, timestamp_t time, double value){
     
@@ -446,6 +446,7 @@ void splitAndInsertIntoLeaves(BPlusTree *tree, Node *oldNode, Record *record){
     
     tempKeys = malloc(tree->nodeSize * sizeof(void));
     insertPoint = 0;
+    int nrOfTempKeys = 0;
     
     // <=because of possible duplicates?
     // calculation of the insertPoint for the new Record: as soon as key is higher insert point is right
@@ -462,6 +463,8 @@ void splitAndInsertIntoLeaves(BPlusTree *tree, Node *oldNode, Record *record){
         if (j == insertPoint){
           j++;
         }
+        
+        nrOfTempKeys++;
         //the value where the new record is added is not been filled yet / a gap is inserted
         tempKeys[j] = oldNode->keys[i];
 
@@ -469,6 +472,7 @@ void splitAndInsertIntoLeaves(BPlusTree *tree, Node *oldNode, Record *record){
     
     //enter the record to the right position
     tempKeys[insertPoint] = record;
+    nrOfTempKeys++;
 
     newNode->numOfKeys = 0;
     oldNode->numOfKeys = 0;
@@ -481,9 +485,12 @@ void splitAndInsertIntoLeaves(BPlusTree *tree, Node *oldNode, Record *record){
         oldNode->numOfKeys++;
     }
     
+    printf("\nNrOfTempKeys: %d", nrOfTempKeys);
     //fill second leaf
-    for (j = 0, i = split; i < tree->nodeSize; i++, j++) {
+    printf("\nKeys in new node: ");
+    for (j = 0, i = split; j < nrOfTempKeys-split; i++, j++) {
         newNode->keys[j] = tempKeys[i];
+        printf("%fl", ((Record *)newNode->keys[j])->recordKey);
         newNode->numOfKeys++;
     }
     
@@ -661,38 +668,35 @@ void insertRecordIntoLeaf(Node *node, Record *record){
 
 Node * findLeaf(BPlusTree *tree, double key){
     int i = 0;
-    Node * c = tree->root;
-    if (c == NULL) {
-        return c;
+    Node * curNode = tree->root;
+    if (curNode == NULL) {
+        return curNode;
     }
-    while (!c->is_Leaf) {
-        
-        for (i = 0; i < c->numOfKeys - 1; i++){
-            printf("%fl ", ((innerNode *)c->keys[i])->key);
-        }
-            i = 0;
-            while (i < c->numOfKeys) {
+    while (!curNode->is_Leaf) {
+
+        i = 0;
+        while (i < curNode->numOfKeys) {
                 
-                //key is bigger -> search again
-                if (key >= ((innerNode *)c->keys[i])->key) i++;
-                
-                // key is smaller -> go to this pointer
-                else break;
+             //key is bigger -> search again
+             if (key >= ((innerNode *)curNode->keys[i])->key){
+                  i++;
+             }
+             // key is smaller -> go to this pointer
+             else break;
         }
-            printf("%d ->\n", i);
-        
-            //new lookup node
-            c = (Node *)c->pointers[i];
+       
+        //new lookup node
+        curNode = (Node *)curNode->pointers[i];
     }
     
     //debugging
-    printf("\nLeaf [");
-    for (i = 0; i < c->numOfKeys; i++){
-      printf("%fl ", ((Record *)c->keys[i])->recordKey);
+    printf("\nLeaf with num of keys: %d was [", curNode->numOfKeys);
+    for (i = 0; i < curNode->numOfKeys; i++){
+      printf("%fl ", ((Record *)curNode->keys[i])->recordKey);
     }
     
     //leaf found
-    return c;
+    return curNode;
 }
 
 
@@ -707,7 +711,7 @@ void newTree(BPlusTree *tree, Record *record){
 
 
 
-/************************* CIRCULAR ARRAY ********************************************/
+/************************************* CIRCULAR ARRAY ********************************************/
 
 void serie_update(BPlusTree *tree, CircularArray *array, timestamp_t newTime, double newValue){
     
