@@ -134,9 +134,9 @@ typedef struct innerKey{
     double key;
 }innerKey;
 
-innerKey *innerKey_new(double key){
-    innerKey *newInnerKey = NULL;
-    newInnerKey = malloc(sizeof(innerKey));
+innerKey * innerKey_new(double key){
+    innerKey *newInnerKey = malloc(sizeof(innerKey));
+    newInnerKey->key = key;
     return newInnerKey;
 }
 
@@ -242,6 +242,12 @@ int main(int argc, const char * argv[]) {
     
     shift(tree, array, ti, 300);
     addRecordToTree(tree, 600, 600);
+    addRecordToTree(tree, 100, 100);
+    
+    
+    addRecordToTree(tree, 400, 400);
+
+
     
 
     printTree(tree);
@@ -491,7 +497,6 @@ void addRecordToTree(BPlusTree *tree, timestamp_t time, double value){
     
     // leaf has room for key and pointer
     if (leaf->numOfKeys < tree->nodeSize) {
-        
         insertRecordIntoLeaf(tree, leaf, leafKeyValue);
         return;
     }
@@ -519,7 +524,7 @@ void splitAndInsertIntoLeaves(BPlusTree *tree, Node *oldNode,leafKey *firstValue
     //new Leaf
     newNode = Leaf_new(tree->nodeSize);
     
-    tempKeys = malloc(tree->nodeSize * sizeof(void));
+    tempKeys = malloc(tree->nodeSize * sizeof(leafKey));
     
     insertPoint = 0;
     int nrOfTempKeys = 0;
@@ -564,8 +569,6 @@ void splitAndInsertIntoLeaves(BPlusTree *tree, Node *oldNode,leafKey *firstValue
     //fill second leaf
     for (j = 0, i = split; j < nrOfTempKeys-split; i++, j++) {
         
-        printf("%fl", ((leafKey *)newNode->keys[j])->leafKey);
-
         
         newNode->keys[j] = tempKeys[i];
         newNode->numOfKeys++;
@@ -584,10 +587,12 @@ void splitAndInsertIntoLeaves(BPlusTree *tree, Node *oldNode,leafKey *firstValue
     //the record to insert in upper node
     double keyForParent = ((leafKey *)newNode->keys[0])->leafKey;
     
-    insertIntoParent(tree, oldNode, keyForParent, newNode);
-    
     //free allocated memory of pointers
     free(tempKeys);
+    
+    insertIntoParent(tree, oldNode, keyForParent, newNode);
+    
+
 
 }
 
@@ -601,6 +606,7 @@ void insertIntoParent(BPlusTree *tree, Node *oldChild, double newKey, Node *newC
     //new root
     if(parent == NULL){
         insertIntoANewRoot(tree, oldChild, newKey, newChild);
+        printf("root %fl", ((innerKey *)tree->root->keys[0])->key);
         return;
     }
     //Find the parents pointer from the old node
@@ -716,6 +722,7 @@ void insertIntoANewRoot(BPlusTree *tree, Node * left, double key, Node * right) 
     
     Node * root = Node_new(tree->nodeSize);
     innerKey * newInnerKey = innerKey_new(key);
+    tree->root = root;
     root->keys[0] = newInnerKey;
     root->pointers[0] = left;
     root->pointers[1] = right;
@@ -723,7 +730,6 @@ void insertIntoANewRoot(BPlusTree *tree, Node * left, double key, Node * right) 
     root->parent = NULL;
     left->parent = root;
     right->parent = root;
-    tree->root = root;
 }
 
 void insertRecordIntoLeaf(BPlusTree *tree, Node *node, leafKey *newKey){
@@ -745,11 +751,6 @@ void insertRecordIntoLeaf(BPlusTree *tree, Node *node, leafKey *newKey){
     node->keys[insertPoint] = newKey;
     node->numOfKeys++;
     
-    //debugging
-    printf("\nInsert Record into Leaf: elements in leaf: ");
-    for(int y = 0; y< node->numOfKeys; y++){
-        printf("%fl ", ((leafKey *)node->keys[y])->leafKey);
-    }
     
 }
 
@@ -787,13 +788,7 @@ Node * findLeaf(BPlusTree *tree, double newKey, timestamp_t newTime){
         //new lookup node
         curNode = (Node *)curNode->pointers[i];
     }
-    
-    //debugging
-    printf("\nLeaf with num of keys: %d was [", curNode->numOfKeys);
-    for (i = 0; i < curNode->numOfKeys; i++){
-      printf("%fl ", ((Record *)curNode->keys[i])->recordKey);
-    }
-    
+
     //leaf found
     return curNode;
 }
@@ -825,7 +820,7 @@ void addDuplicateToDoublyLinkedList(timestamp_t newTime, Node *node, int insertI
 int getInsertPoint(BPlusTree *tree, Node *oldNode, leafKey *keyTimePair){
     int insertPoint = 0;
     
-    while ((tree->nodeSize > oldNode->numOfKeys )&& oldNode->numOfKeys > insertPoint && ((leafKey *)oldNode->keys[insertPoint])->leafKey < keyTimePair->leafKey){
+    while (oldNode->numOfKeys > insertPoint && ((leafKey *)oldNode->keys[insertPoint])->leafKey < keyTimePair->leafKey){
         insertPoint++;
     }
     
