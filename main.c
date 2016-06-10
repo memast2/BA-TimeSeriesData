@@ -144,7 +144,6 @@ void innerKey_destroy(innerKey *key){
     free(key);
 }
 
-
 Node * Node_new(int nodeSize){
     Node *node = malloc(sizeof(Node));
     node->keys = malloc(nodeSize * sizeof(void));
@@ -154,6 +153,7 @@ Node * Node_new(int nodeSize){
     node->prev = NULL;
     return node;
 }
+
 Node *Leaf_new(int nodeSize){
     Node *node = Node_new(nodeSize);
     node->is_Leaf = true;
@@ -166,8 +166,6 @@ void Node_destroy(Node *node) {
     free(node->keys);
     free(node);
 }
-
-
 
 typedef struct BPlusTree{
     struct Node *root;
@@ -194,7 +192,7 @@ bool lookup(CircularArray *array, timestamp_t t, double *value);
 void shift(BPlusTree *tree, CircularArray *array, timestamp_t time, double value);
 timestamp_t neighbour(double value, timestamp_t t);
 
-
+void printArray(CircularArray * array, int arraySize);
 void serie_update(BPlusTree *tree, CircularArray *array, timestamp_t t, double value);
 void initialize_data(CircularArray *array);
 void initialize_tree(BPlusTree *tree);
@@ -235,7 +233,6 @@ int main(int argc, const char * argv[]) {
     int arraySize =3;
     int treeNodeSize = 3;
     timestamp_t ti = 300;
-    double lookupValue = 0;
     
     CircularArray *array = CircularArray_new(arraySize);
     initialize_data(array);
@@ -244,50 +241,16 @@ int main(int argc, const char * argv[]) {
     BPlusTree *tree = BPlusTree_new(treeNodeSize);
     
     shift(tree, array, ti, 300);
-    shift(tree, array, 600, 600);
-    shift(tree, array, 900, 900);
-  //  printTree(tree);
-    shift(tree, array, 1200, 1200);
-  //  printTree(tree);
-    shift(tree, array, 1500, 1500);
-  //  printTree(tree);
-    shift(tree, array, 2100, 2100);
-
-    shift(tree, array, 2700, 2700);
-    shift(tree, array, 900, 900);
-    shift(tree, array, 2400, 2400);
-
-
-    shift(tree, array, 3000, 3000);
-    shift(tree, array, 3300, 3300);
-    shift(tree, array, 3600, 3600);
-
-
- //   printTree(tree);
-
-
-    bool x1 = lookup(array, 300, &lookupValue);
-    bool x2 = lookup(array, 600, &lookupValue);
-    bool x3 = lookup(array, 1500, &lookupValue);
-    bool x4 = lookup(array, 2100, &lookupValue);
-
-    //1 means true
-    printf("\n\nlookup:\n%d\n", x1);
-    printf("%d\n", x2);
-    printf("%d\n", x3);
-    printf("%d\n", x4);
-    printf("%fl\n", lookupValue);
+    addRecordToTree(tree, 600, 600);
     
-    printf("Elements in Serie:\n");
 
-    for (int i = 0; i < arraySize; i++) {
-        printf("%.2fl ", array->data[i].value);
-    }
-    printf("\n");
+    printTree(tree);
+
 
     
-    //BPlusTree_destroy(tree);
-    //CircularArray_destroy(array);
+    
+    BPlusTree_destroy(tree);
+    CircularArray_destroy(array);
 
     return 0;
 }
@@ -295,17 +258,32 @@ int main(int argc, const char * argv[]) {
 void shift(BPlusTree *tree, CircularArray *array, timestamp_t time, double value){
     
     //just new values are added to the tree and to the circular array
-    //    addRecordToTree(tree, time, value);
-        serie_update(tree, array, time, value);
+     addRecordToTree(tree, time, value);
+     serie_update(tree, array, time, value);
     
+}
+
+void printArray(CircularArray * array, int arraySize){
+
+    printf("Elements in Serie:\n");
+    
+    for (int i = 0; i < arraySize; i++) {
+        printf("%.2fl ", array->data[i].value);
+    }
+    printf("\n");
 }
 
 void printTree(BPlusTree *tree){
     printf("\nPrint Tree: ");
     printf("\nroot: ");
-    for(int i=0; i<tree->root->numOfKeys; i++){
-        printf(" %fl ",((Record *)((Node *)tree->root->keys[i]))->recordKey);
+    
+    Node *root = tree->root;
+    
+    for(int i=0; i < root->numOfKeys; i++){
+        printf(" %fl ",((innerKey *)root->keys[i])->key);
     }
+    printf("\n");
+    
     if(NULL != tree->root->pointers){
 
         printf("\n first level: ");
@@ -505,10 +483,11 @@ void addRecordToTree(BPlusTree *tree, timestamp_t time, double value){
         return;
     }
     
-    leafKey *leafKeyValue = leafKey_new(time, value);
-
     //find the right leaf -- if duplicate: insertinto leaf
     leaf = findLeaf(tree, value, time);
+    
+    leafKey *leafKeyValue = leafKey_new(time, value);
+
     
     // leaf has room for key and pointer
     if (leaf->numOfKeys < tree->nodeSize) {
@@ -846,7 +825,7 @@ void addDuplicateToDoublyLinkedList(timestamp_t newTime, Node *node, int insertI
 int getInsertPoint(BPlusTree *tree, Node *oldNode, leafKey *keyTimePair){
     int insertPoint = 0;
     
-    while (insertPoint < tree->nodeSize && ((leafKey *)oldNode->keys[insertPoint])->leafKey < keyTimePair->leafKey){
+    while ((tree->nodeSize > oldNode->numOfKeys )&& oldNode->numOfKeys > insertPoint && ((leafKey *)oldNode->keys[insertPoint])->leafKey < keyTimePair->leafKey){
         insertPoint++;
     }
     
