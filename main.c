@@ -134,13 +134,14 @@ typedef struct innerKey{
     double key;
 }innerKey;
 
-innerKey * innerKey_new(double key){
-    innerKey *newInnerKey = malloc(sizeof(innerKey));
-    newInnerKey->key = key;
+innerKey * innerKey_new(double newKey){
+    innerKey * newInnerKey = NULL;
+    newInnerKey = malloc(sizeof(innerKey));
+    newInnerKey->key = newKey;
     return newInnerKey;
 }
 
-void innerKey_destroy(innerKey *key){
+void innerKey_destroy(innerKey * key){
     free(key);
 }
 
@@ -213,7 +214,7 @@ void insertIntoANewRoot(BPlusTree *tree, Node * left, double record, Node * righ
 void splitAndInsertIntoInnerNode(BPlusTree *tree, Node * parent, int leftIndex, double key, Node * rightNode);
 int getLeftPointerPosition(Node * parent, Node * left);
 void splitAndInsertIntoLeaves(BPlusTree *tree, Node *oldNode, leafKey *firstValue);
-void insertIntoNode(BPlusTree *tree, Node * parent, int leftIndex, double record, Node * newChild);
+Node * insertIntoNode(Node * parent, int leftIndex, double record, Node * newChild);
 
 Record * findRecordandRecordLeaf(BPlusTree *tree, double value);
 Node * deleteEntry(BPlusTree *tree, double value, Node *leaf);
@@ -697,10 +698,10 @@ void insertIntoParent(BPlusTree *tree, Node *oldChild, double newKey, Node *newC
     
     //the new key fits into the node
     if (parent->numOfKeys < tree->nodeSize){
-        insertIntoNode(tree, parent, pointerPositionToLeftNode, newKey, newChild);
-        double existingKey =((innerKey *) tree->root->keys[0])->key;
+        Node * node = insertIntoNode(parent, pointerPositionToLeftNode, newKey, newChild);
+        double existingKey =((innerKey *) node->keys[0])->key;
         printf("Insert Into Node - Existing Key %fl\n", existingKey);
-        double existingKey2 =((innerKey *) tree->root->keys[1])->key;
+        double existingKey2 =((innerKey *) node->keys[1])->key;
         printf("Insert Into Node - Existing Key %fl", existingKey2);
 
 
@@ -713,11 +714,15 @@ void insertIntoParent(BPlusTree *tree, Node *oldChild, double newKey, Node *newC
 
 
 // Inserts a new key and pointer to a node
-void insertIntoNode(BPlusTree *tree, Node * parent, int leftIndex, double newKey, Node * newChild) {
+Node * insertIntoNode(Node * parent, int leftIndex, double newKey, Node * newChild) {
     
     innerKey * newInnerKey = innerKey_new(newKey);
     
-    for (int i = parent->numOfKeys; i > leftIndex; i--) {
+    parent->keys[leftIndex] = newInnerKey;
+    parent->pointers[leftIndex + 1] = newChild;
+
+
+    for(int i = parent->numOfKeys; i > leftIndex; i--) {
         
         //moves pointer one right till insertion point
         parent->pointers[i + 1] = parent->pointers[i];
@@ -726,9 +731,10 @@ void insertIntoNode(BPlusTree *tree, Node * parent, int leftIndex, double newKey
         parent->keys[i] = parent->keys[i - 1];
         
     }
-    parent->keys[leftIndex] = newInnerKey;
-    parent->pointers[leftIndex + 1] = newChild;
+    
     parent->numOfKeys++;
+    
+    return parent;
     
 }
 
