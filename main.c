@@ -256,52 +256,39 @@ int main(int argc, const char * argv[]) {
     addRecordToTree(tree, 300, 300);
     addRecordToTree(tree, 600, 300);
     addRecordToTree(tree, 900, 600);
+
     
     
     addRecordToTree(tree, 1200, 600);
     addRecordToTree(tree, 1500, 1200);
-    printLevelOrder(tree->root);
-    printf("\n \n");
 
     addRecordToTree(tree, 1800, 1500);
-    printLevelOrder(tree->root);
-    printf("\n \n");
     addRecordToTree(tree, 2100, 1800);
     
     addRecordToTree(tree, 2300, 900);
-    printf("\n \n");
-
-    printLevelOrder(tree->root);
-
     addRecordToTree(tree, 2400, 2100);
-    printf("\n \n");
-
-    printLevelOrder(tree->root);
 
     addRecordToTree(tree, 3300, 2400);
     addRecordToTree(tree, 3600, 2500);
+   
     addRecordToTree(tree, 3900, 2600);
-
+    printf("\n \n");
+    
+    
+    printLevelOrder(tree->root);
 
     addRecordToTree(tree, 4200, 2700);
+    addRecordToTree(tree, 4500, 1600);
+    addRecordToTree(tree, 4800, 2300);
+
+
+    //TODO FIX INSERTION OF DUPLICATE AND INNER VALUE - probably shows to same pointer
 
     printf("\n \n");
 
 
     printLevelOrder(tree->root);
 
-
-
-
-
-
-
-    
-    printf("\n \n");
-
-    printLevelOrder(tree->root);
-    
-    printf("\n \n");
     
     BPlusTree_destroy(tree);
     CircularArray_destroy(array);
@@ -330,7 +317,7 @@ void printArray(CircularArray * array, int arraySize){
 
 int height(Node * node)
 {
-    if (node->pointers == NULL)
+    if (node == NULL || node->pointers == NULL )
         return 1;
     else
     {
@@ -346,20 +333,21 @@ void printGivenLevel(Node * root, int level){
             return;
 
         if (level == 1){
-            
+
             for(int i = 0; i < root->numOfKeys; i++){
                 printf(" %.fl ", ((innerKey *)root->keys[i])->key);
             }
             printf("\t \t");
+
             
         }
         
         else if (level > 1)
         {
-            printf("\n");
             for(int i = 0; i<root->numOfKeys+1; i++){
                 printGivenLevel(root->pointers[i], level-1);
             }
+
         }
 
 }
@@ -369,8 +357,11 @@ void printLevelOrder(Node* root){
         int h = height(root);
         int i;
         printf("\t \t \t ");
-        for (i=1; i<=h; i++)
-            printGivenLevel(root, i);
+    for (i=1; i<=h; i++){
+        printGivenLevel(root, i);
+
+        printf("\n");
+    }
 }
 
 /*
@@ -660,10 +651,10 @@ void splitAndInsertIntoLeaves(BPlusTree *tree, Node *oldNode,leafKey *firstValue
         if (j == insertPoint){
           j++;
         }
-        
-        nrOfTempKeys++;
         //the value where the new record is added is not been filled yet / a gap is inserted
         tempKeys[j] = oldNode->keys[i];
+        nrOfTempKeys++;
+
 
     }
     
@@ -686,8 +677,7 @@ void splitAndInsertIntoLeaves(BPlusTree *tree, Node *oldNode,leafKey *firstValue
    
     
     //fill second leaf
-    for (j = 0, i = split; j < nrOfTempKeys-split; i++, j++) {
-        
+    for (j = 0, i = split; i < nrOfTempKeys; i++, j++) {
         newNode->keys[j] = tempKeys[i];
         newNode->numOfKeys++;
     }
@@ -760,8 +750,7 @@ void insertIntoTheNode(Node * node, int index, double value, Node * newChild){
         
     }
   
-    int indexPlus = index +1;
-    node->pointers[indexPlus] = newChild;
+    node->pointers[index +1] = newChild;
     node->keys[index] = newInnerKey;
     node->numOfKeys++;
 
@@ -770,65 +759,83 @@ void insertIntoTheNode(Node * node, int index, double value, Node * newChild){
 
 
 //Inserts a new key and pointer to a node into a node, then the node's size exceeds the max nodeSize -> split
-void splitAndInsertIntoInnerNode(BPlusTree *tree, Node * parent, int insertPoint, double key, Node * rightNode) {
+void splitAndInsertIntoInnerNode(BPlusTree *tree, Node * oldInnerNode, int index, double key, Node * childNode) {
     
-    Node * newNode;
+    Node * newInnerNode;
     int split, i, j;
     void **tempKeys;
     void **tempPointers;
-    
-    newNode = Node_new(tree->nodeSize);
+    int  nrOfTempKeys = 0;
+
+    newInnerNode = Node_new(tree->nodeSize);
     
     //tempKeys and pointer are temporarly filled with up to nodesize + 1 keys
     tempKeys = malloc((tree->nodeSize +1) * sizeof(void *));
     tempPointers = malloc((tree->nodeSize+2) * sizeof(void *));
     
-    //fills the keys and pointers
-    for (i = 0, j = 0; i < parent->numOfKeys + 1; i++, j++) {
-        if(j == insertPoint){
+    //fills the keys
+    for (i = 0, j = 0; i < oldInnerNode->numOfKeys; i++, j++) {
+        if(j == index){
            j++;
         }
-        
-        tempKeys[j] = parent->keys[i];
-        tempPointers[j] = parent->pointers[i];
+        tempKeys[j] = oldInnerNode->keys[i];
+        nrOfTempKeys++;
+    }
+    
+    //fills the pointers
+    for (int i = 0, j = 0; i < oldInnerNode->numOfKeys + 1; i++, j++) {
+        if(j == index + 1){
+            j++;
+        }
+        tempPointers[j] = oldInnerNode->pointers[i];
     }
     
     innerKey * newInnerKey = innerKey_new(key);
     
-    tempKeys[insertPoint] = newInnerKey;
-    tempPointers[insertPoint + 1] = rightNode;
+    tempKeys[index] = newInnerKey;
+    tempPointers[index + 1] = childNode;
+    nrOfTempKeys++;
     
-    newNode->numOfKeys = 0;
+    newInnerNode->numOfKeys = 0;
+    oldInnerNode->numOfKeys = 0;
+    
     split = getSplitPoint(tree->nodeSize);
     
-    for (i = 0; i < split; i++) {
-        parent->keys[i] = tempKeys[i];
-        parent->pointers[i] = tempPointers[i];
-        parent->numOfKeys++;
+    int x = 0;
+    for (;x < split; x++) {
+        oldInnerNode->keys[x] = tempKeys[x];
+        oldInnerNode->pointers[x] = tempPointers[x];
+        oldInnerNode->numOfKeys++;
+    }
+    oldInnerNode->pointers[x] = tempPointers[x];
+    innerKey * leftMostKey = tempKeys[x];
+    
+    newInnerNode->parent = oldInnerNode->parent;
+
+    newInnerNode->numOfKeys = nrOfTempKeys-oldInnerNode->numOfKeys-1;
+    
+    //one node is given to upper node and has not to be inserted in this one
+    for (++x, j = 0; j < newInnerNode->numOfKeys; j++, x++) {
+        //first key is not inserted to this node - it is inserted to upper node
+        newInnerNode->pointers[j] = tempPointers[x];
+        newInnerNode->keys[j] = tempKeys[x];
+    }
+    newInnerNode->pointers[j] = tempPointers[x];
+    free(tempKeys);
+    free(tempPointers);
+    
+    //set parent to new node
+    for (int i = 0; i < newInnerNode->numOfKeys + 1; i++) {
+        Node * childOfNewNode = oldInnerNode->pointers[i];
+        childOfNewNode->parent = newInnerNode;
     }
     
-    for (i = split, j = 0; i < tree->nodeSize; i++, j++) {
-        newNode->keys[j] = tempKeys[i];
-        newNode->pointers[i] = tempPointers[i];
-        newNode->numOfKeys++;
-    }
-    
-    //unused pointers
-    for (i = parent->numOfKeys; i < tree->nodeSize; i++)
-        parent->pointers[i] = NULL;
-    
-    for (i = newNode->numOfKeys; i < tree->nodeSize; i++)
-        newNode->pointers[i] = NULL;
-    
-    newNode->parent = parent->parent;
-    innerKey * leftMostKey = (innerKey *)newNode->keys[0];
 
     
     //old node to the left and new Node to the right
-    insertIntoParent(tree, parent, leftMostKey->key, rightNode);
+    insertIntoParent(tree, oldInnerNode, leftMostKey->key, newInnerNode);
     
-    free(tempKeys);
-    free(tempPointers);
+
 }
 
 //used in insertIntoParent to find the index of the pointer to the node to the left of the key to be inserted
@@ -856,8 +863,8 @@ void insertIntoANewRoot(BPlusTree *tree, Node * left, double key, Node * right) 
     root->pointers[1] = right;
     root->numOfKeys = 1;
     root->parent = NULL;
-
 }
+
 
 void insertRecordIntoLeaf(BPlusTree *tree, Node *node, leafKey *newKey){
     
