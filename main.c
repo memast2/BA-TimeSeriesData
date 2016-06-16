@@ -221,18 +221,16 @@ leafKey * findLeafKeyAndSetBooleanIfMultipleListValues(Node * node, timestamp_t 
 
 
 /********DELETION********/
-void deleteEntry(BPlusTree *tree, Node *node, double toDelete, void * pointer);
-Node * removeEntryFromTheNode(BPlusTree *tree, Node * node, double toDelete, Node * pointer);
+void deleteEntry(BPlusTree *tree, Node *node, double toDelete, Node * pointer);
+Node * removeEntryFromTheNode(BPlusTree *tree, Node * node, double toDelete, Node * pointerNode);
 void adjustTheRoot(BPlusTree *tree);
 
 Record * findRecordandRecordLeaf(BPlusTree *tree, double value);
 
-
-void mergeNodes(BPlusTree *tree, Node *node, Node *neighbor, int neighborIndex, double key);
-Node * redestributeNodes(BPlusTree *tree, Node *node, Node *neighbor, int neighborIndex, int kIndex, double key);
+void mergeNodes(BPlusTree *tree, Node *node, Node *neighbor, int neighborIndex, void * kPrime);
+void redestributeNodes(BPlusTree *tree, Node *node, Node *neighbor, int neighborIndex, int kIndex, void * pointer);
 
 Node * findLeaf(BPlusTree *tree, timestamp_t newTime, double newKey);
-
 
 int getNeighbourIndex(Node * node);
 void printTree(BPlusTree *tree);
@@ -287,22 +285,38 @@ int main(int argc, const char * argv[]) {
     
     
     printLevelOrder(tree->root);
-    addRecordToTree(tree, 4800, 1600);
-    addRecordToTree(tree, 5100, 1100);
-    addRecordToTree(tree, 5500, 1100);
-
+    addRecordToTree(tree, 5100, 1600);
+    addRecordToTree(tree, 5400, 1100);
+    addRecordToTree(tree, 5700, 1100);
+    
+    
     printf("\n \n");
     
     
     printLevelOrder(tree->root);
     
     delete(tree, 3900, 2600);
+    printf("\n \n");
+    
+    
+    printLevelOrder(tree->root);
     delete(tree, 4500, 1400);
+    printf("\n \n");
+    
+    
+    printLevelOrder(tree->root);
     delete(tree, 4800, 1400);
+    printf("\n \n");
+    
+    
+    printLevelOrder(tree->root);
+    delete(tree, 2400, 2100);
+    printf("\n \n");
 
 
 
-    //TODO FIX INSERTION OF DUPLICATE AND INNER VALUE - probably shows to same pointer
+    printLevelOrder(tree->root);
+    delete(tree, 5100, 1600);
 
     printf("\n \n");
  
@@ -377,17 +391,19 @@ void printLevelOrder(Node* root){
 
 /****************************** DELETION *******************************************************************/
 
-void deleteEntry(BPlusTree *tree, Node *node, double toDelete, void * pointer){
+void deleteEntry(BPlusTree *tree, Node *node, double toDelete, Node * pointer){
     
     int minNumberofKeys;
     Node * neighbor;
-    int neighborIndex, neighbourIndex;
+    int neighbourIndex;
     int kIndex;
-    double key;
     int capacity;
+    innerKey * innerKeyPrime;
     
     // Remove key and pointer from node.
     node = removeEntryFromTheNode(tree, node, toDelete, pointer);
+    
+
     
     if (node == tree->root){
         adjustTheRoot(tree);
@@ -427,8 +443,8 @@ void deleteEntry(BPlusTree *tree, Node *node, double toDelete, void * pointer){
     else{
         kIndex = neighbourIndex;
     }
-
-    key = ((innerKey *)node->parent->keys[kIndex])->key;
+    
+    innerKeyPrime = ((innerKey *)node->parent->keys[kIndex]);
   
 
     if(neighbourIndex == -1){
@@ -448,19 +464,93 @@ void deleteEntry(BPlusTree *tree, Node *node, double toDelete, void * pointer){
     
     //Merge - both nodes together have enough space
     if ((neighbor->numOfKeys + node->numOfKeys ) < capacity){
-        mergeNodes(tree, node, neighbor, neighborIndex, key);
+        mergeNodes(tree, node, neighbor, neighbourIndex, innerKeyPrime);
     }
     
     //Redistribution
     else{
-        redestributeNodes(tree, node, neighbor, neighborIndex, kIndex, key);
+        redestributeNodes(tree, node, neighbor, neighbourIndex, kIndex, innerKeyPrime);
     }
 }
 
 
-void mergeNodes(BPlusTree *tree, Node *node, Node *neighbor, int neighborIndex, double kPrime){
+void redestributeNodes(BPlusTree * tree, Node * node, Node * neighbor, int neighbourIndex, int kIndex, void * kPrime){
     
-    int i, j, neighborInsertionIndex, end;
+    int i;
+    Node * tmp;
+    
+    /* Case: n has a neighbor to the left. Pull the neighbor's last key-pointer pair over
+     * from the neighbor's right end to n's left end.
+     */
+    
+    if (neighbourIndex != -1) {
+        
+        if (!node->is_Leaf){
+            node->pointers[node->numOfKeys + 1] = node->pointers[node->numOfKeys];
+        }
+        
+        for (i = node->numOfKeys; i > 0; i--) {
+            node->keys[i] = node->keys[i - 1];
+            if(!node->is_Leaf){
+                node->pointers[i] = node->pointers[i - 1];
+            }
+        }
+        
+        if (!node->is_Leaf) {
+            node->pointers[0] = neighbor->pointers[neighbor->numOfKeys];
+            tmp = (Node *)node->pointers[0];
+            tmp->parent = node;
+            neighbor->pointers[neighbor->numOfKeys] = NULL;
+            node->keys[0] = kPrime;
+            node->parent->keys[kIndex] = neighbor->keys[neighbor->numOfKeys - 1];
+            
+        }
+        else {
+
+            node->keys[0] = neighbor->keys[neighbor->numOfKeys - 1];
+            node->parent->keys[kIndex] = node->keys[0];
+        }
+    }
+    
+    /* Case: n is the leftmost child.
+     * Take a key-pointer pair from the neighbor to the right.
+     * Move the neighbor's leftmost key-pointer pair
+     * to n's rightmost position.
+     */
+    
+    else {
+        if (node->is_Leaf) {
+            node->keys[node->numOfKeys] = neighbor->keys[0];
+            node->parent->keys[kIndex] = neighbor->keys[1];
+        }
+        else {
+            node->keys[node->numOfKeys] = kPrime;
+            node->pointers[node->numOfKeys + 1] = neighbor->pointers[0];
+            tmp = (Node *)node->pointers[node->numOfKeys + 1];
+            tmp->parent = node;
+            node->parent->keys[kIndex] = neighbor->keys[0];
+        }
+        for (i = 0; i < neighbor->numOfKeys - 1; i++) {
+            neighbor->keys[i] = neighbor->keys[i + 1];
+            if(!node->is_Leaf){
+                neighbor->pointers[i] = neighbor->pointers[i + 1];
+            }
+        }
+        if (!node->is_Leaf){
+            neighbor->pointers[i] = neighbor->pointers[i + 1];
+        }
+    }
+    
+    //n now has one more key and one more pointer the neighbor has one fewer
+    node->numOfKeys++;
+    neighbor->numOfKeys--;
+
+}
+
+
+void mergeNodes(BPlusTree *tree, Node *node, Node *neighbor, int neighborIndex, void * kPrime){
+    
+    int i, j, neighborInsertionIndex;
     Node * tmp;
     
     /* Swap neighbor with node if node is on the
@@ -473,9 +563,9 @@ void mergeNodes(BPlusTree *tree, Node *node, Node *neighbor, int neighborIndex, 
     }
     
     /* Starting point in the neighbor for copying
-     * keys and pointers from n.
+     * keys and pointers from the other node.
      * Recall that n and neighbor have swapped places
-     * in the special case of n being a leftmost child.
+     * in the special case of the node being a leftmost child.
      */
     neighborInsertionIndex = neighbor->numOfKeys;
     
@@ -485,65 +575,41 @@ void mergeNodes(BPlusTree *tree, Node *node, Node *neighbor, int neighborIndex, 
     
     if (!node->is_Leaf) {
         
-        /* Append key.
-         */
-        
-        ((innerKey *)neighbor->keys[neighborInsertionIndex])->key = kPrime;
+        //key
+        neighbor->keys[neighborInsertionIndex] = kPrime;
         neighbor->numOfKeys++;
         
-        end = node->numOfKeys;
-        
-        for (i = neighborInsertionIndex + 1, j = 0; j < end; i++, j++) {
+        for (i = neighborInsertionIndex + 1, j = 0; j < node->numOfKeys; i++, j++) {
             neighbor->keys[i] = node->keys[j];
             neighbor->pointers[i] = node->pointers[j];
             neighbor->numOfKeys++;
             node->numOfKeys--;
         }
-        
-        //The number of pointers is alwaysone more than the number of keys.
-        neighbor->pointers[i] = node->pointers[j];
-        
-        /* All children must now point up to the same parent.
-         */
-        
-        for (i = 0; i < neighbor->numOfKeys + 1; i++) {
-            tmp = (Node *)neighbor->pointers[i];
-            tmp->parent = neighbor;
-        }
+        neighbor->pointers[tree->nodeSize] = node->pointers[tree->nodeSize];
+
     }
     
-    /* In a leaf, append the keys and pointers of
-     * n to the neighbor.
-     * Set the neighbor's last pointer to point to
-     * what had been n's right neighbor.
+    /* In a leaf, append the keys and pointers of the node to the neighbor.
+     * Set the neighbor's last pointer to point to what had been n's right neighbor.
      */
-    
     else {
         for (i = neighborInsertionIndex, j = 0; j < node->numOfKeys; i++, j++) {
             neighbor->keys[i] = node->keys[j];
-            neighbor->pointers[i] = node->pointers[j];
             neighbor->numOfKeys++;
         }
-        neighbor->pointers[tree->nodeSize] = node->pointers[tree->nodeSize];
+        
+        //relink leafs
+        neighbor->next = node->next;
+        (node->next)->prev = neighbor;
     }
     
-    deleteEntry(tree, node->parent, kPrime, node);
+    deleteEntry(tree, node->parent, ((innerKey *)kPrime)->key, node);
     
     free(node->keys);
     free(node->pointers);
     free(node);
-
+    
 }
-
-
-/*
-
-Node * redestributeNodes(BPlusTree *tree, Node *node, Node *neighbor, int neighborIndex, int kIndex, double key){
-    return node ;
-}
-
-*/
-
 
 int getNeighbourIndex(Node * node ){
     
@@ -592,19 +658,20 @@ void delete(BPlusTree *tree, timestamp_t time, double value){
     boolean hasMultipleTimes = false;
     
     leaf = findLeaf(tree, time, value);
-    
+
     leafKey * leafKeyToDelete;
     
     leafKeyToDelete = findLeafKeyAndSetBooleanIfMultipleListValues(leaf, time, value, &hasMultipleTimes);
     
     if(leafKeyToDelete != NULL && leafKeyToDelete != NULL){
+        
         //key has duplicates --> delete first value ind doubly linked list
         if(hasMultipleTimes){
             deleteFirstListValue(leafKeyToDelete);
             return;
         }
         
-        deleteEntry(tree, leaf, leafKeyToDelete->leafKey, leafKeyToDelete);
+        deleteEntry(tree, leaf, leafKeyToDelete->leafKey, NULL);
         leafKey_destroy(leafKeyToDelete);
     }
     
@@ -615,12 +682,15 @@ void delete(BPlusTree *tree, timestamp_t time, double value){
 
 Node * removeEntryFromTheNode(BPlusTree *tree, Node * node, double toDelete, Node * pointerNode){
     
-    int i;
+    printf("first Keys: %.fl \t", ((innerKey *)node->keys[0])->key);
+    printf("to Delete Key: %.fl", toDelete);
+
     
     // Remove the key and shift other keys
-    i = 0;
+    int i = 0;
+
     while (((innerKey *)node->keys[i])->key != toDelete){
-        i++;
+            i++;
     }
     
     for (++i; i < node->numOfKeys; i++){
@@ -729,13 +799,12 @@ Node * findLeaf(BPlusTree *tree, timestamp_t newTime, double newKey){
     while (!curNode->is_Leaf) {
         
         i = 0;
-        
         while (i < curNode->numOfKeys) {
             
             currentKey = ((innerKey *)curNode->keys[i])->key;
             
             //key is bigger -> search again
-            if (newKey > currentKey){
+            if (newKey >= currentKey){
                 i++;
             }
             
