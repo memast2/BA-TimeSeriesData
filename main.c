@@ -312,7 +312,7 @@ timestamp_t neighbor(BPlusTree *tree, double value, timeStampSet * set){
     else{
         newNeighborhood->posPlus = leafKeyVal->firstListValue;
     }
-    
+        
     
     timestamp_t t = 0;
     
