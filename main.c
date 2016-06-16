@@ -245,7 +245,7 @@ int main(int argc, const char * argv[]) {
     
     //variable - can be commandLine Input
     int arraySize =3;
-    int treeNodeSize = 4;
+    int treeNodeSize = 3;
     //timestamp_t ti = 300;
     
     CircularArray *array = CircularArray_new(arraySize);
@@ -317,6 +317,8 @@ int main(int argc, const char * argv[]) {
 
     printLevelOrder(tree->root);
     delete(tree, 5100, 1600);
+    delete(tree, 1800, 1500);
+
 
     printf("\n \n");
  
@@ -407,6 +409,7 @@ void deleteEntry(BPlusTree *tree, Node *node, double toDelete, Node * pointer){
     
     if (node == tree->root){
         adjustTheRoot(tree);
+        return;
     }
     
     // deletion from a innernode or leaf
@@ -472,7 +475,6 @@ void deleteEntry(BPlusTree *tree, Node *node, double toDelete, Node * pointer){
         redestributeNodes(tree, node, neighbor, neighbourIndex, kIndex, innerKeyPrime);
     }
 }
-
 
 void redestributeNodes(BPlusTree * tree, Node * node, Node * neighbor, int neighbourIndex, int kIndex, void * kPrime){
     
@@ -547,7 +549,6 @@ void redestributeNodes(BPlusTree * tree, Node * node, Node * neighbor, int neigh
 
 }
 
-
 void mergeNodes(BPlusTree *tree, Node *node, Node *neighbor, int neighborIndex, void * kPrime){
     
     int i, j, neighborInsertionIndex;
@@ -585,7 +586,13 @@ void mergeNodes(BPlusTree *tree, Node *node, Node *neighbor, int neighborIndex, 
             neighbor->numOfKeys++;
             node->numOfKeys--;
         }
-        neighbor->pointers[tree->nodeSize] = node->pointers[tree->nodeSize];
+        neighbor->pointers[i] = node->pointers[j];
+        
+        //All children must now point up to the same parent.
+        for (i = 0; i < neighbor->numOfKeys + 1; i++) {
+            tmp = (Node *)neighbor->pointers[i];
+            tmp->parent = neighbor;
+        }
 
     }
     
@@ -599,9 +606,11 @@ void mergeNodes(BPlusTree *tree, Node *node, Node *neighbor, int neighborIndex, 
         }
         
         //relink leafs
-        neighbor->next = node->next;
-        (node->next)->prev = neighbor;
-    }
+        if(node->next != NULL){
+            neighbor->next = node->next;
+            (node->next)->prev = neighbor;
+            }
+       }
     
     deleteEntry(tree, node->parent, ((innerKey *)kPrime)->key, node);
     
@@ -616,12 +625,17 @@ int getNeighbourIndex(Node * node ){
     int i;
     // Return the index of the key to the left of the pointer in the parent pointing to the node
     // If node is not found return -1
-    for (i = 0; i <= node->parent->numOfKeys; i++){
+    if(node->parent != NULL){
         
-        if (node->parent->pointers[i] == node){
-            return i-1;
+        for (i = 0; i <= node->parent->numOfKeys; i++){
+
+                if (node->parent->pointers[i] == node){
+                    return i-1;
+                }
+
         }
     }
+
     //node is leftmost child
     return -1;
 }
@@ -681,11 +695,7 @@ void delete(BPlusTree *tree, timestamp_t time, double value){
 }
 
 Node * removeEntryFromTheNode(BPlusTree *tree, Node * node, double toDelete, Node * pointerNode){
-    
-    printf("first Keys: %.fl \t", ((innerKey *)node->keys[0])->key);
-    printf("to Delete Key: %.fl", toDelete);
 
-    
     // Remove the key and shift other keys
     int i = 0;
 
