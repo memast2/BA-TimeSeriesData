@@ -10,7 +10,6 @@
 #include <math.h>
 #include <stddef.h>
 
-
 /******************************TIMESTAMP DEF********************************************/
 
 #define timestampDiff 300
@@ -30,8 +29,6 @@ typedef struct serie{
     timestamp_t time;
     double value;
 }serie;
-
-
 
 typedef struct circularArray{
     serie *data;
@@ -53,10 +50,7 @@ void CircularArray_destroy(CircularArray *array) {
     free(array);
 }
 
-
-
 /******************************STRUCTS - DOUBLY LINKED LIST AND LEAF KEYS********************************************/
-
 
 typedef struct listValue{
     timestamp_t timestamp;
@@ -253,12 +247,11 @@ int main(int argc, const char * argv[]) {
     //create BplusTree;
     BPlusTree *tree = BPlusTree_new(treeNodeSize);
     
+    
     addRecordToTree(tree, 300, 300);
     addRecordToTree(tree, 600, 300);
     addRecordToTree(tree, 900, 600);
 
-    
-    
     addRecordToTree(tree, 1200, 600);
     addRecordToTree(tree, 1500, 1200);
 
@@ -278,14 +271,26 @@ int main(int argc, const char * argv[]) {
     printLevelOrder(tree->root);
 
     addRecordToTree(tree, 4200, 2700);
-    addRecordToTree(tree, 4500, 1600);
-    addRecordToTree(tree, 4800, 2300);
+    addRecordToTree(tree, 4500, 1400);
+
+    
+    printf("\n \n");
+    
+    
+    printLevelOrder(tree->root);
+    addRecordToTree(tree, 4800, 1600);
+    addRecordToTree(tree, 5100, 1100);
+
+    printf("\n \n");
+    
+    
+    printLevelOrder(tree->root);
 
 
     //TODO FIX INSERTION OF DUPLICATE AND INNER VALUE - probably shows to same pointer
 
     printf("\n \n");
-
+ 
 
     printLevelOrder(tree->root);
 
@@ -696,11 +701,12 @@ void splitAndInsertIntoLeaves(BPlusTree *tree, Node *oldNode,leafKey *firstValue
     double keyForParent;
     keyForParent = ((leafKey *)newNode->keys[0])->leafKey;
     
+    //free allocated memory of pointers
+    free(tempKeys);
   
     insertIntoParent(tree, oldNode, keyForParent, newNode);
     
-    //free allocated memory of pointers
-    free(tempKeys);
+
     
 
 
@@ -756,7 +762,6 @@ void insertIntoTheNode(Node * node, int index, double value, Node * newChild){
 
 
 }
-
 
 //Inserts a new key and pointer to a node into a node, then the node's size exceeds the max nodeSize -> split
 void splitAndInsertIntoInnerNode(BPlusTree *tree, Node * oldInnerNode, int index, double key, Node * childNode) {
@@ -826,7 +831,7 @@ void splitAndInsertIntoInnerNode(BPlusTree *tree, Node * oldInnerNode, int index
     
     //set parent to new node
     for (int i = 0; i < newInnerNode->numOfKeys + 1; i++) {
-        Node * childOfNewNode = oldInnerNode->pointers[i];
+        Node * childOfNewNode = newInnerNode->pointers[i];
         childOfNewNode->parent = newInnerNode;
     }
     
@@ -844,12 +849,11 @@ int getLeftPointerPosition(Node * parent, Node * oldChild){
     int leftIndex = 0;
     //gets the index where the parent shows to the old, known child - after the new one will have the pointer leftIndex + 1
     
-    while (leftIndex <= parent->numOfKeys && (parent->pointers[leftIndex]) != oldChild){
+    while (parent->pointers[leftIndex] != oldChild){
         leftIndex++;
     }
     return leftIndex;
 }
-
 
 void insertIntoANewRoot(BPlusTree *tree, Node * left, double key, Node * right) {
     
@@ -864,7 +868,6 @@ void insertIntoANewRoot(BPlusTree *tree, Node * left, double key, Node * right) 
     root->numOfKeys = 1;
     root->parent = NULL;
 }
-
 
 void insertRecordIntoLeaf(BPlusTree *tree, Node *node, leafKey *newKey){
     
@@ -887,7 +890,6 @@ void insertRecordIntoLeaf(BPlusTree *tree, Node *node, leafKey *newKey){
     
     
 }
-
 
 void addDuplicateToDoublyLinkedList(timestamp_t newTime, Node *node, int insertIndex){
     
