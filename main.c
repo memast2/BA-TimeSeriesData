@@ -21,8 +21,8 @@ typedef bool boolean;
 #define true 1
 #define false 0
 
-/******************************STRUCTS - CIRCULAR ARRAY********************************************/
 
+/******************************STRUCTS - CIRCULAR ARRAY********************************************/
 
 /* serie is element of circular array */
 typedef struct serie{
@@ -31,7 +31,7 @@ typedef struct serie{
 }serie;
 
 typedef struct circularArray{
-    serie *data;
+    serie * data;
     int size;
     int lastUpdatePosition;
 }CircularArray;
@@ -50,13 +50,27 @@ void CircularArray_destroy(CircularArray *array) {
     free(array);
 }
 
+typedef struct timeStampSet{
+    int size;
+    timestamp_t * timeStamps;
+}timeStampSet;
+
+timeStampSet * timeStampSet_new(int size){
+    timeStampSet * newTimeStampSet = malloc(size * sizeof(timeStampSet));
+    newTimeStampSet->size = size;
+    return newTimeStampSet;
+}
+
+void timeStampSet_destroy(timeStampSet * timeStampSet){
+    free(timeStampSet);
+}
+
 /******************************STRUCTS - DOUBLY LINKED LIST AND LEAF KEYS********************************************/
 
 typedef struct listValue{
     timestamp_t timestamp;
     struct listValue *prev, *next;
 }listValue;
-
 
 listValue *listValue_new(timestamp_t time) {
     listValue *newListValue = NULL;
@@ -66,6 +80,25 @@ listValue *listValue_new(timestamp_t time) {
     newListValue->next = NULL;
 
     return newListValue;
+}
+
+/* serie is element of circular array */
+typedef struct neighborhood{
+    listValue * posMinus;
+    listValue * posPlus;
+}neighborhood;
+
+void neighborhood_destroy(neighborhood * neighborhood){
+    free(neighborhood->posMinus);
+    free(neighborhood->posPlus);
+}
+
+neighborhood * neighborhood_new(){
+    neighborhood * neighboorhoodPointer = malloc(sizeof(neighborhood));
+    neighboorhoodPointer->posMinus = NULL;
+    neighboorhoodPointer->posPlus = NULL;
+    
+    return neighboorhoodPointer;
 }
 
 typedef struct leafKey{
@@ -96,24 +129,6 @@ void leafKey_destroy(leafKey *leafKey) {
 
 
 /******************************STRUCTS - BPLUSTREE*******************************************************************/
-
-
-typedef struct Record{
-    double recordKey;
-    timestamp_t time;
-}Record;
-
-void Record_destroy(Record *record) {
-    free(record);
-}
-
-Record *record_new(timestamp_t time, double value) {
-    Record *newRecord = NULL;
-    newRecord = malloc(sizeof(Record));
-    newRecord->recordKey = value;
-    newRecord->time = time;
-    return newRecord;
-}
 
 typedef struct Node{
     struct Node *parent;
@@ -188,19 +203,20 @@ void BPlusTree_destroy(BPlusTree *bPlus) {
     free(bPlus);
 }
 
+/*************************************** MASTER METHOD *******************************************/
 
-bool lookup(CircularArray *array, timestamp_t t, double *value);
 void shift(BPlusTree *tree, CircularArray *array, timestamp_t time, double value);
 
-timestamp_t neighbour(timestamp_t t, double value);
-
+/*************************************** CIRCULAR ARRAY *******************************************/
+bool lookup(CircularArray *array, timestamp_t t, double *value);
 void printArray(CircularArray * array, int arraySize);
 void serie_update(BPlusTree *tree, CircularArray *array, timestamp_t t, double value);
 void initialize_data(CircularArray *array);
+
+/*************************************** NEIGHBOUR *******************************************/
+timestamp_t neighbor(BPlusTree *tree, double value, timeStampSet * set);
+
 void initialize_tree(BPlusTree *tree);
-
-
-void delete(BPlusTree *tree, timestamp_t time, double value);
 
 void addRecordToTree(BPlusTree *tree, timestamp_t t, double value);
 void newTree(BPlusTree *tree, timestamp_t time, double value);
@@ -213,74 +229,127 @@ int getLeftPointerPosition(Node * parent, Node * left);
 void splitAndInsertIntoLeaves(BPlusTree *tree, Node *oldNode, leafKey *firstValue);
 void insertIntoTheNode(Node * node, int index, double value, Node * newChild);
 
+Node * findLeaf(BPlusTree *tree, double newKey);
 
+
+/******** DELETION ********/
 boolean isDuplicateKey(Node * curNode, timestamp_t newTime, double newKey);
 void deleteFirstListValue(leafKey *leafKey);
-leafKey * findLeafKeyAndSetBooleanIfMultipleListValues(Node * node, timestamp_t time, double key, boolean *hasMultipleTimes);
-
-
-
-/********DELETION********/
+leafKey * findLeafKeyAndSetBooleanIfMultipleListValues(Node * node, double key, boolean *hasMultipleTimes);
+void delete(BPlusTree *tree, timestamp_t time, double value);
 void deleteEntry(BPlusTree *tree, Node *node, double toDelete, Node * pointer);
 Node * removeEntryFromTheNode(BPlusTree *tree, Node * node, double toDelete, Node * pointerNode);
 void adjustTheRoot(BPlusTree *tree);
 
-Record * findRecordandRecordLeaf(BPlusTree *tree, double value);
-
 void mergeNodes(BPlusTree *tree, Node *node, Node *neighbor, int neighborIndex, void * kPrime);
 void redestributeNodes(BPlusTree *tree, Node *node, Node *neighbor, int neighborIndex, int kIndex, void * pointer);
 
-Node * findLeaf(BPlusTree *tree, timestamp_t newTime, double newKey);
-
 int getNeighbourIndex(Node * node);
 void printTree(BPlusTree *tree);
+
+/************** DUPLICATE HANDLING ****************/
 void addDuplicateToDoublyLinkedList(Node *node, timestamp_t newTime, double duplicateKey);
 int getInsertPoint(BPlusTree *tree, Node *oldNode, leafKey *leafKey);
 
+/************** PRINT ****************/
 void printLevelOrder(Node* root);
+void addAndDeleteSomeExampleValuesFromTree(BPlusTree * tree);
 
 
+/****************************** METHODS *******************************************************************/
 
 int main(int argc, const char * argv[]) {
     
     //variable - can be commandLine Input
     int arraySize =3;
-    int treeNodeSize = 3;
-    //timestamp_t ti = 300;
+    int treeNodeSize = 4;
+    int size = 5;
+    timestamp_t searchedTime;
+    timeStampSet * set = timeStampSet_new(size);
     
-    CircularArray *array = CircularArray_new(arraySize);
+    CircularArray * array = CircularArray_new(arraySize);
     initialize_data(array);
 
     //create BplusTree;
-    BPlusTree *tree = BPlusTree_new(treeNodeSize);
+    BPlusTree * tree = BPlusTree_new(treeNodeSize);
+    addAndDeleteSomeExampleValuesFromTree(tree);
     
+    double searchValue;
+//    searchedTime = neighbor(tree, searchValue, set);
+
+    BPlusTree_destroy(tree);
+    CircularArray_destroy(array);
+
+    return 0;
+}
+
+void shift(BPlusTree *tree, CircularArray *array, timestamp_t time, double value){
+    
+    //just new values are added to the tree and to the circular array
+     addRecordToTree(tree, time, value);
+     serie_update(tree, array, time, value);
+    
+}
+
+
+/****************************** NEIGHBOUR METHOD *******************************************************************/
+
+timestamp_t neighbor(BPlusTree *tree, double value, timeStampSet * set){
+    
+    boolean hasMultipleTimes = false;
+    Node * leafNode;
+    leafKey * leafKeyVal;
+    neighborhood * newNeighborhood = neighborhood_new();
+    
+    leafNode = findLeaf(tree, value);
+    leafKeyVal = findLeafKeyAndSetBooleanIfMultipleListValues(leafNode, value, &hasMultipleTimes);
+    
+    newNeighborhood->posMinus = leafKeyVal->firstListValue;
+
+    if(hasMultipleTimes){
+        newNeighborhood->posPlus = leafKeyVal->firstListValue->prev;
+    }
+    else{
+        newNeighborhood->posPlus = leafKeyVal->firstListValue;
+    }
+    
+    
+    timestamp_t t = 0;
+    
+    
+    return t;
+}
+
+
+/****************************** PRINT TREE *******************************************************************/
+
+void addAndDeleteSomeExampleValuesFromTree(BPlusTree * tree){
     
     addRecordToTree(tree, 300, 300);
     addRecordToTree(tree, 600, 300);
     addRecordToTree(tree, 900, 600);
-
+    
     addRecordToTree(tree, 1200, 600);
     addRecordToTree(tree, 1500, 1200);
-
+    
     addRecordToTree(tree, 1800, 1500);
     addRecordToTree(tree, 2100, 1800);
     
     addRecordToTree(tree, 2300, 900);
     addRecordToTree(tree, 2400, 2100);
-
+    
     addRecordToTree(tree, 3300, 2400);
     addRecordToTree(tree, 3600, 2500);
-   
+    
     addRecordToTree(tree, 3900, 2600);
     printf("\n \n");
     
-    
     printLevelOrder(tree->root);
-
+    
     addRecordToTree(tree, 4200, 2700);
     addRecordToTree(tree, 4500, 1400);
     addRecordToTree(tree, 4800, 1400);
-
+    
     printf("\n \n");
     
     
@@ -312,35 +381,21 @@ int main(int argc, const char * argv[]) {
     printLevelOrder(tree->root);
     delete(tree, 2400, 2100);
     printf("\n \n");
-
-
-
+    
+    
     printLevelOrder(tree->root);
     delete(tree, 5100, 1600);
     delete(tree, 1800, 1500);
-
-
+    
+    
     printf("\n \n");
- 
-
+    
+    
     printLevelOrder(tree->root);
-
     
-    BPlusTree_destroy(tree);
-    CircularArray_destroy(array);
 
-    return 0;
-}
-
-void shift(BPlusTree *tree, CircularArray *array, timestamp_t time, double value){
-    
-    //just new values are added to the tree and to the circular array
-     addRecordToTree(tree, time, value);
-     serie_update(tree, array, time, value);
     
 }
-
-/****************************** PRINT TREE *******************************************************************/
 
 int height(Node * node){
     if (node == NULL || node->pointers == NULL )
@@ -379,7 +434,7 @@ void printGivenLevel(Node * root, int level){
 }
 
 /* Function to print level order traversal a tree*/
-void printLevelOrder(Node* root){
+void printLevelOrder(Node * root){
         int h = height(root);
         int i;
         printf("\t \t \t ");
@@ -671,11 +726,11 @@ void delete(BPlusTree *tree, timestamp_t time, double value){
     //default value for Multiple Times in Doubly linked List
     boolean hasMultipleTimes = false;
     
-    leaf = findLeaf(tree, time, value);
+    leaf = findLeaf(tree, value);
 
     leafKey * leafKeyToDelete;
     
-    leafKeyToDelete = findLeafKeyAndSetBooleanIfMultipleListValues(leaf, time, value, &hasMultipleTimes);
+    leafKeyToDelete = findLeafKeyAndSetBooleanIfMultipleListValues(leaf, value, &hasMultipleTimes);
     
     if(leafKeyToDelete != NULL && leafKeyToDelete != NULL){
         
@@ -737,7 +792,7 @@ Node * removeEntryFromTheNode(BPlusTree *tree, Node * node, double toDelete, Nod
     return node;
 }
 
-leafKey * findLeafKeyAndSetBooleanIfMultipleListValues(Node * node, timestamp_t time, double key, boolean *hasMultipleTimes){
+leafKey * findLeafKeyAndSetBooleanIfMultipleListValues(Node * node, double key, boolean *hasMultipleTimes){
     
     int i;
     for(i = 0; i< node->numOfKeys; i++){
@@ -795,7 +850,7 @@ void deleteFirstListValue(leafKey *leafKey){
 
 /************************************* COMMONLY USED METHODS **************************************/
 
-Node * findLeaf(BPlusTree *tree, timestamp_t newTime, double newKey){
+Node * findLeaf(BPlusTree *tree, double newKey){
     int i = 0;
     
     Node * curNode = tree->root;
@@ -853,7 +908,7 @@ void addRecordToTree(BPlusTree *tree, timestamp_t time, double value){
     }
     
     //find the right leaf -- if duplicate: insertinto leaf
-    leaf = findLeaf(tree, time, value);
+    leaf = findLeaf(tree, value);
     
     
     //if duplicate -> insert to leaf as Doubly linked list value
