@@ -201,8 +201,7 @@ void initialize_data(CircularArray *array);
 void initialize_tree(BPlusTree *tree);
 
 
-void deleteRecordFromTree(BPlusTree *tree, timestamp_t t, double value);
-
+void deleteRecordFromTree(BPlusTree *tree, timestamp_t time, double value);
 
 void addRecordToTree(BPlusTree *tree, timestamp_t t, double value);
 void newTree(BPlusTree *tree, timestamp_t time, double value);
@@ -217,7 +216,8 @@ void insertIntoTheNode(Node * node, int index, double value, Node * newChild);
 
 
 boolean isDuplicateKey(Node * curNode, timestamp_t newTime, double newKey);
-
+void deleteFirstListValue(leafKey *leafKey);
+leafKey * findLeafKeyAndSetBooleanIfMultipleListValues(Node * node, timestamp_t time, double key, boolean *hasMultipleTimes);
 
 Record * findRecordandRecordLeaf(BPlusTree *tree, double value);
 Node * deleteEntry(BPlusTree *tree, double value, Node *leaf);
@@ -286,12 +286,15 @@ int main(int argc, const char * argv[]) {
     printLevelOrder(tree->root);
     addRecordToTree(tree, 4800, 1600);
     addRecordToTree(tree, 5100, 1100);
+    addRecordToTree(tree, 5500, 1100);
+
 
     printf("\n \n");
     
     
     printLevelOrder(tree->root);
     
+    deleteRecordFromTree(tree, 3900, 2600);
 
     //TODO FIX INSERTION OF DUPLICATE AND INNER VALUE - probably shows to same pointer
 
@@ -370,22 +373,82 @@ void printLevelOrder(Node* root){
 
 
 /******************************DELETION*******************************************************************/
-/*
-void deleteRecordFromTree(BPlusTree *tree, timestamp_t time, double value) {
+
+
+leafKey * findLeafKeyAndSetBooleanIfMultipleListValues(Node * node, timestamp_t time, double key, boolean *hasMultipleTimes){
     
-    Node * keyLeaf;
-    leafKey * toDeleteValue;
-    printf("\nfirst ADDRESS OF LEAF: %d", (int)&keyLeaf);
-    
-    keyLeaf = findLeaf(tree, value, time);
-    //TODO: check if keyLeaf cannot be addressed thru &
-    keyRecord = findRecordandRecordLeaf(tree, value);
-    
-    if (keyLeaf != NULL && keyRecord != NULL) {
-        tree->root = deleteEntry(tree, value, keyLeaf);
-        free(keyRecord);
+    int i;
+    for(i = 0; i< node->numOfKeys; i++){
+        double currentKey =((leafKey *)node->keys[i])->leafKey;
+        
+        if(key == currentKey){
+            break;
+        }
     }
+    
+    leafKey * currentLeafKey = ((leafKey *)node->keys[i]);
+    
+    //first value in leaf
+    listValue * firstListValue = currentLeafKey->firstListValue;
+    
+    if(firstListValue->next != NULL){
+        *hasMultipleTimes = true;
+        return currentLeafKey;
+      
+    }
+    return currentLeafKey;
+    
 }
+
+void deleteFirstListValue(leafKey *leafKey){
+    
+    //first value in leaf
+    listValue * firstListValue = leafKey->firstListValue;
+    
+    listValue * next = firstListValue->next;
+    listValue * prev = firstListValue->prev;
+    
+    //next is the second oldest key
+    leafKey->firstListValue = next;
+    prev->next = next;
+    next->prev = prev;
+    
+    //just one time left
+    if(prev->next == next->next){
+        leafKey->firstListValue->next = NULL;
+        leafKey->firstListValue->prev = NULL;
+    }
+    
+    //always the first list value must be the oldest list value and
+    // therefore the one that is deleted
+    listValue_destroy(firstListValue);
+
+}
+
+
+void deleteRecordFromTree(BPlusTree *tree, timestamp_t time, double value){
+    
+    Node * leaf;
+    //default value for Multiple Times in Doubly linked List
+    boolean hasMultipleTimes = false;
+    
+    leaf = findLeaf(tree, time, value);
+    
+    leafKey * leafKeyToDelete;
+    
+    leafKeyToDelete = findLeafKeyAndSetBooleanIfMultipleListValues(leaf, time, value, &hasMultipleTimes);
+    
+    //key has duplicates --> delete first value ind doubly linked list
+    if(hasMultipleTimes){
+        deleteFirstListValue(leafKeyToDelete);
+        return;
+    }
+    
+    //TODO
+
+
+}
+
 /*
 leafKey * findValueandLeaf(BPlusTree *tree, timestamp_t time, double value) {
     int i = 0;
@@ -538,7 +601,6 @@ int getPointerIndex(Node * node ){
   */
 /************************************* COMMONLY USED METHODS **************************************/
 
-
 Node * findLeaf(BPlusTree *tree, timestamp_t newTime, double newKey){
     int i = 0;
     
@@ -610,22 +672,6 @@ void addRecordToTree(BPlusTree *tree, timestamp_t time, double value){
 
  }
 
-boolean isDuplicateKey(Node * curNode, timestamp_t newTime, double newKey){
-    
-    /**duplicate**/
-    // key is equal -> go to this pointer and directly insert to list
-    for(int i = 0; i<curNode->numOfKeys; i++){
-        double currentKey =((leafKey *)curNode->keys[i])->leafKey;
-        
-        if(newKey == currentKey){
-            return true;
-        }
-    }
-    return false;
-
-}
-
-
 void addDuplicateToDoublyLinkedList(Node *node, timestamp_t newTime, double duplicateKey){
     
     int i;
@@ -657,6 +703,21 @@ void addDuplicateToDoublyLinkedList(Node *node, timestamp_t newTime, double dupl
     newListValue->prev = currentListValue;
     newListValue->next = firstListValue;
     firstListValue->prev = newListValue;
+}
+
+boolean isDuplicateKey(Node * curNode, timestamp_t newTime, double newKey){
+    
+    /**duplicate**/
+    // key is equal -> go to this pointer and directly insert to list
+    for(int i = 0; i<curNode->numOfKeys; i++){
+        double currentKey =((leafKey *)curNode->keys[i])->leafKey;
+        
+        if(newKey == currentKey){
+            return true;
+        }
+    }
+    return false;
+    
 }
 
 // Finds the place to split a node that is too big into two.
@@ -949,7 +1010,6 @@ void newTree(BPlusTree *tree, timestamp_t time, double value){
 
 
 /******************************PRINT ARRAY*******************************************************************/
-
 
 void printArray(CircularArray * array, int arraySize){
     
