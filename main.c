@@ -299,18 +299,20 @@ int main(int argc, const char * argv[]) {
     //variable - can be commandLine Input
     int arraySize =10;
     
-    int treeNodeSize = 4;
+    int treeNodeSize = 3;
     
-    /*int size = 5;
-     timestamp_t searchedTime;
-     timeStampSet * set = timeStampSet_new(size);*/
-    
+
     CircularArray * array = CircularArray_new(arraySize);
     initialize_data(array);
 
     //create BplusTree;
     BPlusTree * tree = BPlusTree_new(treeNodeSize);
     exampleShifts(tree, array);
+    
+    /*****************neighbour methode**********/
+    /*int size = 5;
+     timestamp_t searchedTime;
+     timeStampSet * set = timeStampSet_new(size);*/
     
     //double searchValue;
     //searchedTime = neighbor(tree, searchValue, set);
@@ -365,21 +367,24 @@ timestamp_t neighbor(BPlusTree *tree, double value, timeStampSet * set){
 
 void exampleShifts(BPlusTree * tree, CircularArray * array){
     shift(tree, array, 300, 300);
-    shift(tree, array, 600, 300);
+    shift(tree, array, 600, 200);
     shift(tree, array, 900, 600);
     
     shift(tree, array, 1200, 600);
     shift(tree, array, 1500, 1200);
     
     shift(tree, array, 1800, 1500);
-    shift(tree, array, 2100, 1800);
-    
-    shift(tree, array, 2400, 900);
     shift(tree, array, 2700, 2100);
+    //arrive late
+    shift(tree, array, 2100, 300);
+    shift(tree, array, 2400, 900);
+
     shift(tree, array, 3000, 0);
-    shift(tree, array, 3900, 10);
+    shift(tree, array, 3300, 10);
     shift(tree, array, 3600, 20);
-    shift(tree, array, 4500, 50);
+    shift(tree, array, 3900, 50);
+    shift(tree, array, 4200, 60);
+
 
 
     
