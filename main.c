@@ -249,7 +249,8 @@ void serie_update(BPlusTree *tree, CircularArray *array, timestamp_t t, double v
 void initialize_data(CircularArray *array);
 
 /*************************************** NEIGHBOUR *******************************************/
-timestamp_t neighbor(BPlusTree *tree, double value, timeStampSet * set);
+
+timestamp_t neighbor(BPlusTree *tree, double value, timestamp_t time, timeStampSet * set);
 
 void initialize_tree(BPlusTree *tree);
 
@@ -310,9 +311,11 @@ int main(int argc, const char * argv[]) {
     exampleShifts(tree, array);
     
     /*****************neighbour methode**********/
-    /*int size = 5;
-     timestamp_t searchedTime;
-     timeStampSet * set = timeStampSet_new(size);*/
+    int queryPatternLength = 3;
+     
+     
+    timestamp_t searchedTime;
+    timeStampSet * set = timeStampSet_new(queryPatternLength);
     
     //double searchValue;
     //searchedTime = neighbor(tree, searchValue, set);
@@ -333,35 +336,46 @@ void shift(BPlusTree *tree, CircularArray *array, timestamp_t time, double value
 
 /****************************** NEIGHBOUR METHOD *******************************************************************/
 
-timestamp_t neighbor(BPlusTree *tree, double value, timeStampSet * set){
+timestamp_t neighbor(BPlusTree *tree, double value, timestamp_t time, timeStampSet * set){
     
     boolean hasMultipleTimes = false;
     Node * leafNode;
     leafKey * leafKeyVal;
     neighborhood * newNeighborhood = neighborhood_new();
+    boolean b = true;
     
     leafNode = findLeaf(tree, value);
     leafKeyVal = findLeafKeyAndSetBooleanIfMultipleListValues(leafNode, value, &hasMultipleTimes);
     
-    newNeighborhood->posMinus = leafKeyVal->firstListValue;
-
-    if(hasMultipleTimes){
-        newNeighborhood->posPlus = leafKeyVal->firstListValue->prev;
-    }
-    else{
-        newNeighborhood->posPlus = leafKeyVal->firstListValue;
+    //set pos to right value
+    while(b){
+        
+        listValue * curListValue = leafKeyVal->firstListValue;
+        
+        if(curListValue->timestamp == time){
+            newNeighborhood->posMinus = curListValue;
+            newNeighborhood->posPlus = curListValue;
+            b = false;
+            break;
+        }
+        
+        curListValue = curListValue->next;
+    
     }
     
+    while(newNeighborhood->posMinus != NULL && ){
+        
+    }
     
     //TODO REST
     
     
     timestamp_t t = 0;
     
+
     
     return t;
 }
-
 
 /****************************** PRINT TREE *******************************************************************/
 
@@ -396,7 +410,6 @@ void exampleShifts(BPlusTree * tree, CircularArray * array){
 
 
 }
-
 
 void addAndDeleteSomeExampleValuesFromTree(BPlusTree * tree){
     
