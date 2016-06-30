@@ -852,31 +852,30 @@ Node * removeEntryFromTheNode(BPlusTree *tree, Node * node, double toDelete, Nod
     
     for (++i; i < node->numOfKeys; i++){
         node->keys[i - 1] = node->keys[i];
+        //timestamps to 
+        if(node->isLeaf){
+            node->pointers[i-1] = node->pointers[i];
+        }
     }
     
-    
-    //TODO THINK ABOUT POINTER LEAF->TIMESTAMPS
-    // Set the other pointers to NULL
     
     int y, numOfPointers;
+    
     // Remove the pointer and shift other pointers accordingly.
     // First determine number of pointers.
-    if(node->isLeaf){
-        numOfPointers = node->numOfKeys;
-    }
-    //inner Node
-    else{
+    if(!node->isLeaf){
+
         numOfPointers = node->numOfKeys+1;
-    }
     
-    y = 0;
-    while (node->pointers[y] != pointerNode) {
-        y++;
-    }
-    for (++y; y < numOfPointers; y++){
-        node->pointers[y - 1] = node->pointers[y];
-    }
+        y = 0;
+        while (node->pointers[y] != pointerNode) {
+            y++;
+        }
+        for (++y; y < numOfPointers; y++){
+            node->pointers[y - 1] = node->pointers[y];
+        }
     
+    }
     //one key is gone
     node->numOfKeys--;
     
