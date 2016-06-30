@@ -356,7 +356,7 @@ void random_shifts(BPlusTree * tree, CircularArray * array)
     srand(time(NULL));
     
     timeStampT time = 0;
-    for (int i = 0; i < 100; ++i) {
+    for (int i = 0; i < 1000; ++i) {
         time += TIMESTAMP_DIFF;
         double rand_value = rand() % 10;
         printf("inserting time: %ld, value: %f\n", time, rand_value);
@@ -638,7 +638,7 @@ void redestributeNodes(BPlusTree * tree, Node * node, Node * neighbor, int neigh
              * I don't quite understand why you take here the last element
              * from the neighbor instead of the first value of the node?
              */
-            node->parent->keys[kIndex] = neighbor->keys[neighbor->numOfKeys - 1];
+            node->parent->keys[kIndex] = node->keys[0];
             
         }
         else {
@@ -852,7 +852,7 @@ Node * removeEntryFromTheNode(BPlusTree *tree, Node * node, double toDelete, Nod
     
     for (++i; i < node->numOfKeys; i++){
         node->keys[i - 1] = node->keys[i];
-        //timestamps to 
+        //timestamps to
         if(node->isLeaf){
             node->pointers[i-1] = node->pointers[i];
         }
