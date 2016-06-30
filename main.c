@@ -445,22 +445,31 @@ bool Neighborhood_grow(Neighborhood *self, CircularArray *array, TimeSet *timese
 
     
     if(tMinus != NULL && tPlus != NULL){
-        if(abs(tMinusValueNow - tMinusValue)<= abs(tPlusValueNow - tMinusValue)){
+        if(fabs(tMinusValueNow - tMinusValue)<= fabs(tPlusValueNow - tMinusValue)){
             self->posMinus = tMinus;
+            *timestamp = tMinus->timestamp;
+
         }
         else{
             self->posPlus = tPlus;
+            *timestamp = tPlus->timestamp;
+
         }
     }
     else if(tMinus != NULL){
         self->posMinus = tMinus;
+        *timestamp = tMinus->timestamp;
+
     }
     else if(tPlus != NULL){
         self->posPlus = tPlus;
+        *timestamp = tPlus->timestamp;
     }
     else{
         return false;
     }
+    //add seen timestamp
+    TimeSet_add(timeset, timestamp);
     
     return true;
 
