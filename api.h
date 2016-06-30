@@ -16,12 +16,12 @@ typedef struct {
  * data structure whatever you want, I simply called it
  * SBTree for now.
  */
-typedef struct {
+//typedef struct {
   /*
    * you need to fill this in here with whatever
    * data you need.
    */
-} SBTree
+//} SBTree;
 
 
 /*
@@ -31,7 +31,7 @@ typedef struct {
  *   size: length of the circular array
  *   order: number of values per node in the B+ tree
  */
-SBTree *SBTree_new(int size, int order);
+//SBTree *SBTree_new(int size, int order);
 
 
 /*
@@ -40,7 +40,7 @@ SBTree *SBTree_new(int size, int order);
  * Parameters:
  *   self: the SBTree
  */
-void SBTree_destroy(SBTree *self);
+//void SBTree_destroy(SBTree *self);
 
 
 /*
@@ -51,7 +51,7 @@ void SBTree_destroy(SBTree *self);
  *   self: the SBTree
  *   measurement: the measurement to insert
  */
-void SBTree_shift(SBTree *self, Measurement *measurement);
+//void SBTree_shift(SBTree *self, Measurement *measurement);
 
 
 /*
@@ -65,7 +65,7 @@ void SBTree_shift(SBTree *self, Measurement *measurement);
  *   value: a pointer where the value of the measurement should be
  *          stored in
  */
-bool SBTree_lookup(SBTree *self, timestamp_t time, double *value);
+//bool SBTree_lookup(SBTree *self, timestamp_t time, double *value);
 
 
 /*
@@ -80,8 +80,8 @@ bool SBTree_lookup(SBTree *self, timestamp_t time, double *value);
  *           query pattern, offset=pattern_length means the latest
  *           time point in the query pattern.
  */
-Neighborhood *Neighborhood_new(SBTree *tree, Measurement *measurement,
-    int pattern_length, int offset);
+//Neighborhood *Neighborhood_new(SBTree *tree, Measurement *measurement,
+    //int pattern_length, int offset);
 
 
 
@@ -91,7 +91,7 @@ Neighborhood *Neighborhood_new(SBTree *tree, Measurement *measurement,
  * Parameters:
  *   self: the Neighborhood
  */
-void Neighborhood_destroy(Neighborhood *self);
+//void Neighborhood_destroy(Neighborhood *self);
 
 
 
@@ -105,4 +105,4 @@ void Neighborhood_destroy(Neighborhood *self);
  *   timestamp: used as a return value, contains the time point of the
  *              new still unseen value discovered by this function
  */
-bool Neighborhood_grow(Neighborhood *self, TimeSet *timeset, timestamp_t *timestamp);
+//bool Neighborhood_grow(Neighborhood *self, TimeSet *timeset, timestamp_t *timestamp);
