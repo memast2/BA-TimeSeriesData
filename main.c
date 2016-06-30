@@ -109,11 +109,11 @@ void list_destroy(ListValue *head) {
     
     ListValue * temp;
     while(head != head->next)
-        {
-            temp = head;
-            head = head->next;
-            free(temp);
-        }
+    {
+        temp = head;
+        head = head->next;
+        free(temp);
+    }
     free(head);
 }
 
@@ -161,7 +161,7 @@ void Node_destroy(Node *node) {
         }
         
     }
-
+    
     free(node->pointers);
     free(node->keys);
     
@@ -195,13 +195,13 @@ void destroyTreeNodes(Node * node) {
                 destroyTreeNodes(node->pointers[i]);
                 
             }
-
+            
         }
         
         
     }
-  
-   
+    
+    
     
 }
 
@@ -282,7 +282,7 @@ int main(int argc, const char * argv[]) {
     
     //create BplusTree;
     BPlusTree * tree = BPlusTree_new(treeNodeSize);
-   // exampleShifts(tree, array);
+    exampleShifts(tree, array);
     
     
     
@@ -292,7 +292,7 @@ int main(int argc, const char * argv[]) {
     //create BplusTree;
     BPlusTree * tree2 = BPlusTree_new(treeNodeSize);
     random_shifts(tree2, array2);
-
+    
     
     /*****************neighbour methode**********/
     /*int size = 5;
@@ -319,25 +319,25 @@ void shift(BPlusTree *tree, CircularArray *array, timeStampT time, double value)
 /****************************** NEIGHBOUR METHOD *******************************************************************/
 
 timeStampT neighbor(BPlusTree *tree, double value, TimeStampSet * set){
-           /*
-    bool hasMultipleTimes = false;
-    Node * leafNode;
-
-    double leafKeyVal;
-    Neighborhood * newNeighborhood = neighborhood_new();
-    
-    leafNode = findLeaf(tree, value);
-    int i = findLeafKeyAndSetboolIfMultipleListValues(leafNode, value, &hasMultipleTimes);
-
-    newNeighborhood->posMinus = leafKeyVal->firstListValue;
-    
-    if(hasMultipleTimes){
-        newNeighborhood->posPlus = leafKeyVal->firstListValue->prev;
-    }
-    else{
-        newNeighborhood->posPlus = leafKeyVal->firstListValue;
-    }
-   */
+    /*
+     bool hasMultipleTimes = false;
+     Node * leafNode;
+     
+     double leafKeyVal;
+     Neighborhood * newNeighborhood = neighborhood_new();
+     
+     leafNode = findLeaf(tree, value);
+     int i = findLeafKeyAndSetboolIfMultipleListValues(leafNode, value, &hasMultipleTimes);
+     
+     newNeighborhood->posMinus = leafKeyVal->firstListValue;
+     
+     if(hasMultipleTimes){
+     newNeighborhood->posPlus = leafKeyVal->firstListValue->prev;
+     }
+     else{
+     newNeighborhood->posPlus = leafKeyVal->firstListValue;
+     }
+     */
     
     //TODO REST
     
@@ -379,7 +379,7 @@ void exampleShifts(BPlusTree * tree, CircularArray * array){
     
     
     printLevelOrder(tree->root);
-
+    
     
     shift(tree, array, 1200, 600);
     shift(tree, array, 1500, 1200);
@@ -596,8 +596,7 @@ void deleteEntry(BPlusTree *tree, Node *node, double toDelete, Node * pointer){
     else{
         capacity = tree->nodeSize;
     }
-    capacity = tree->nodeSize;
-    
+   
     
     //Merge - both nodes together have enough space
     if ((neighbor->numOfKeys + node->numOfKeys ) < capacity){
@@ -619,7 +618,7 @@ void redestributeNodes(BPlusTree * tree, Node * node, Node * neighbor, int neigh
     if (neighbourIndex != -1) {
         
         if(!node->isLeaf){
-          node->pointers[node->numOfKeys + 1] = node->pointers[node->numOfKeys];
+            node->pointers[node->numOfKeys + 1] = node->pointers[node->numOfKeys];
         }
         
         for (i = node->numOfKeys; i > 0; i--) {
@@ -647,7 +646,7 @@ void redestributeNodes(BPlusTree * tree, Node * node, Node * neighbor, int neigh
             node->keys[0] = neighbor->keys[neighbor->numOfKeys - 1];
             //ADD
             node->pointers[0] = neighbor->pointers[neighbor->numOfKeys - 1];
-
+            
             node->parent->keys[kIndex] = node->keys[0];
         }
     }
@@ -673,9 +672,9 @@ void redestributeNodes(BPlusTree * tree, Node * node, Node * neighbor, int neigh
         }
         for (i = 0; i < neighbor->numOfKeys - 1; i++) {
             neighbor->keys[i] = neighbor->keys[i + 1];
-           // if(!node->isLeaf){
-                neighbor->pointers[i] = neighbor->pointers[i + 1];
-          //  }
+            // if(!node->isLeaf){
+            neighbor->pointers[i] = neighbor->pointers[i + 1];
+            //  }
         }
         if (!node->isLeaf){
             neighbor->pointers[i] = neighbor->pointers[i + 1];
@@ -723,7 +722,7 @@ void mergeNodes(BPlusTree *tree, Node *node, Node *neighbor, int neighborIndex, 
             neighbor->keys[i] = node->keys[j];
             neighbor->pointers[i] = node->pointers[j];
             neighbor->numOfKeys++;
-
+            
             //decreases numOfKeys
             decreasingIndex++;
         }
@@ -736,8 +735,8 @@ void mergeNodes(BPlusTree *tree, Node *node, Node *neighbor, int neighborIndex, 
             tmp->parent = neighbor;
         }
     }
-        // a leaf, append the keys and pointers of the node to the neighbor.
-        //Set the neighbor's last pointer to point to what had been the node's right neighbor.
+    // a leaf, append the keys and pointers of the node to the neighbor.
+    //Set the neighbor's last pointer to point to what had been the node's right neighbor.
     else
     {
         
@@ -832,9 +831,9 @@ void delete(BPlusTree *tree, timeStampT time, double value){
         }
         else{
             deleteEntry(tree, leaf, leaf->keys[positionOfKey], NULL);
-          
+            
         }
-   
+        
     }
     
     else{
@@ -877,7 +876,7 @@ Node * removeEntryFromTheNode(BPlusTree *tree, Node * node, double toDelete, Nod
     for (++y; y < numOfPointers; y++){
         node->pointers[y - 1] = node->pointers[y];
     }
-
+    
     //one key is gone
     node->numOfKeys--;
     
@@ -947,14 +946,14 @@ Node * findLeaf(BPlusTree *tree, double newKey){
     int i = 0;
     
     Node * curNode = tree->root;
-  
+    
     
     if (curNode == NULL) {
         return curNode;
     }
     
     while (!curNode->isLeaf) {
-       
+        
         i = getInsertPoint(tree, curNode, newKey);
         
         //new lookup node
@@ -1027,7 +1026,7 @@ void addDuplicateToDoublyLinkedList(Node *node, timeStampT newTime, double dupli
     
     ListValue * lastListValue = firstListValue->prev;
     
-
+    
     //update doubly linked pointers
     firstListValue->prev = newListValue;
     lastListValue->next = newListValue;
@@ -1117,7 +1116,7 @@ void splitAndInsertIntoLeaves(BPlusTree *tree, Node *oldNode, timeStampT time, d
         newNode->keys[j] = tempKeys[i];
         //ADD
         newNode->pointers[j] = tempPointers[i];
-
+        
         newNode->numOfKeys++;
     }
     
