@@ -173,33 +173,39 @@ void destroyTreeNodes(Node * node) {
     if(node == NULL){
         return;
     }
- //   destroyTreeNodes(node->pointers[0]);
-   // destroyTreeNodes(node->pointers[1]);
-
-
+    //   destroyTreeNodes(node->pointers[0]);
+    // destroyTreeNodes(node->pointers[1]);
+    
+    
     free(node);
 }
 
 
 Node * BPlusTree_destroy(BPlusTree *tree) {
-   
+    
     destroyTreeNodes(tree->root);
     free(tree);
     return NULL;
 }
 
+typedef struct NeighborhoodPosition{
+    ListValue * timeStampPosition;
+    Node * LeafPosition;
+    int indexPosition;
+}NeighborhoodPosition;
+
 
 typedef struct Neighborhood{
     int patternLength;
     int offset;
-    ListValue * posMinus;
-    ListValue * posPlus;
     TimeSet *timeSet;
-    Node * currentLeftLeaf;
-    Node * currentRightLeaf;
-    int currentRightPointerIndex;
-    int currentLeftPointerIndex;
+    double key;
+    NeighborhoodPosition *leftPosition;
+    NeighborhoodPosition *rightPosition;
 }Neighborhood;
+
+
+
 
 /*************************************** MASTER METHOD *******************************************/
 
@@ -245,13 +251,6 @@ void redestributeNodes(BPlusTree *tree, Node *node, Node *neighbor, int neighbor
 int getNeighbourIndex(Node * node);
 void printTree(BPlusTree *tree);
 
-
-/************** NEIGHBORHOOD ****************/
-
-Neighborhood *Neighborhood_new(BPlusTree *tree, Measurement *measurement,int patternLength, int offset);
-void Neighborhood_destroy(Neighborhood *self);
-bool Neighborhood_grow(Neighborhood *self, CircularArray *array, TimeSet *timeset, timeStampT *timestamp);
-
 /************** DUPLICATE HANDLING ****************/
 void addDuplicateToDoublyLinkedList(Node *node, timeStampT newTime, double duplicateKey);
 int getInsertPoint(BPlusTree *tree, Node *oldNode, double leafKey);
@@ -265,8 +264,12 @@ void random_shifts(BPlusTree * tree, CircularArray * array);
 
 /************** NEIGHBORHOOD ****************/
 
+Neighborhood *Neighborhood_new(BPlusTree *tree, Measurement *measurement,int patternLength, int offset);
+void Neighborhood_destroy(Neighborhood *self);
 ListValue * getTMinus(Neighborhood *self, ListValue * currentMinusListValue, Node *currentLeftLeaf, bool isLeftMostKey, int steps);
 ListValue * getTPlus(Neighborhood *self, ListValue * currentPlusListValue, Node *currentPlusLeaf, bool isRightMostKey, int steps);
+bool Neighborhood_grow(Neighborhood *self, TimeSet *timeset, timeStampT *timestamp);
+
 /*
  * Initializes a new neighborhood in the B+ tree.
  *
@@ -282,8 +285,14 @@ ListValue * getTPlus(Neighborhood *self, ListValue * currentPlusListValue, Node 
 Neighborhood *Neighborhood_new(BPlusTree *tree, Measurement *measurement,int patternLength, int offset){
     
     Neighborhood *newNeighborhood = malloc(sizeof(Neighborhood));
+    NeighborhoodPosition *leftNeighbourhoodPos = malloc(sizeof(NeighborhoodPosition));
+    NeighborhoodPosition *rightNeighbourhoodPos = malloc(sizeof(NeighborhoodPosition));
+    
+    newNeighborhood->key = measurement->value;
+    
     TimeSet *newTimeSet = TimeSet_new();
     TimeSet_add(newTimeSet, measurement->timestamp);
+    
     newNeighborhood->offset = offset;
     newNeighborhood->patternLength = patternLength;
     newNeighborhood->timeSet = newTimeSet;
@@ -300,17 +309,41 @@ Neighborhood *Neighborhood_new(BPlusTree *tree, Measurement *measurement,int pat
         listValueOnThatKey = listValueOnThatKey->next;
     }
     
-    newNeighborhood->posMinus = listValueOnThatKey;
-    newNeighborhood->posPlus = listValueOnThatKey;
-    newNeighborhood->currentLeftLeaf = leafNode;
-    newNeighborhood->currentRightPointerIndex = pointerIndex;
-    newNeighborhood->currentLeftPointerIndex = pointerIndex;
+    leftNeighbourhoodPos->indexPosition = pointerIndex;
+    leftNeighbourhoodPos->LeafPosition = leafNode;
+    leftNeighbourhoodPos->timeStampPosition = listValueOnThatKey;
+    
+    rightNeighbourhoodPos->indexPosition = pointerIndex;
+    rightNeighbourhoodPos->LeafPosition = leafNode;
+    rightNeighbourhoodPos->timeStampPosition = listValueOnThatKey;
+    
+    newNeighborhood->leftPosition = leftNeighbourhoodPos;
+    newNeighborhood->rightPosition = rightNeighbourhoodPos;
     
     return newNeighborhood;
-
+    
     
 }
 
+NeighborhoodPosition * NeighborhoodPosition_new(){
+    NeighborhoodPosition * newNeighborHoodPosition = malloc(sizeof(NeighborhoodPosition));
+    Node * newNode = malloc(sizeof(Node));
+    ListValue * newListValue = malloc(sizeof(ListValue));
+    
+    newNeighborHoodPosition->LeafPosition = newNode;
+    newNeighborHoodPosition->timeStampPosition = newListValue;
+    
+    return newNeighborHoodPosition;
+}
+
+void NeighborhoodPosition_destroy(NeighborhoodPosition * nPosition){
+    Node * node = nPosition->LeafPosition;
+    ListValue * lValue = nPosition->timeStampPosition;
+    
+    free(node);
+    free(lValue);
+    free(nPosition);
+}
 
 /*
  * Destroys the Neighborhood and frees all allocated memory
@@ -324,75 +357,113 @@ void Neighborhood_destroy(Neighborhood *self){
     free(self);
 }
 
-
-void isLeftMost(Neighborhood *self, bool *isLeftMostKey){
+bool isLeftMost(NeighborhoodPosition *pos){
+    bool leftMostKey = false;
     
     //left leaf or right leaf must be checked
-    if(0 == self->currentLeftPointerIndex){
-        *isLeftMostKey = true;
+    if(0 == pos->indexPosition){
+        leftMostKey = true;
     }
+    return leftMostKey;
 }
 
-void isRightMost(Neighborhood *self, bool *isRightMostKey){
+bool isRightMost(NeighborhoodPosition *pos){
+    bool rightMostKey = false;
     
-    if(self->currentRightLeaf->numOfKeys == self->currentRightPointerIndex){
-        *isRightMostKey = true;
+    if((pos->LeafPosition->numOfKeys - 1) == pos->indexPosition){
+        rightMostKey = true;
     }
-
+    
+    return rightMostKey;
 }
 
-
-void setTMinusAndTMinusOffset(Neighborhood *self, ListValue *tMinus, ListValue *offsetTMinus, double *value,  int additionalSteps){
-    bool isLeftMostKey = false;
-
-    isLeftMost(self, &isLeftMostKey);
+NeighborhoodPosition * getTMinusNeighborHoodPosition(NeighborhoodPosition *currentTMinusPos){
     
-    Node * currentLeftLeaf = self->currentLeftLeaf;
-    ListValue * currentMinusListValue = self->posMinus;
-
-    tMinus = getTMinus(self, currentMinusListValue, currentLeftLeaf, isLeftMostKey, 0 + additionalSteps);
+    bool isLeftMostKey = isLeftMost(currentTMinusPos);
     
-    int steps;
-    //offset timestamps
-    steps = self->patternLength - self->offset;
+    int currentIndex = currentTMinusPos->indexPosition;
     
-    if(steps<0){
-        //both need t minus method
-        offsetTMinus = getTMinus(self, currentMinusListValue, currentLeftLeaf, isLeftMostKey, abs(steps)+additionalSteps);
+    //sibling is in doubly linked list
+    if(currentTMinusPos->timeStampPosition->prev->timestamp < currentTMinusPos->timeStampPosition->timestamp){
         
+        currentTMinusPos->timeStampPosition = currentTMinusPos->timeStampPosition->prev;
     }
+    
+    //needs to change key
     else{
-        offsetTMinus = getTPlus(self, currentMinusListValue, currentLeftLeaf, isLeftMostKey, steps+additionalSteps);
+        
+        //same node
+        if(!isLeftMostKey){
+            
+            int newIndexPostion = currentIndex -1;
+            currentTMinusPos->indexPosition = newIndexPostion;
+            currentTMinusPos->timeStampPosition = ((ListValue *)currentTMinusPos->LeafPosition->pointers[newIndexPostion])->prev;
+        }
+        //left neighbour
+        else{
+            
+            if(currentTMinusPos->LeafPosition->prev != NULL){
+                
+                Node *neighbourNode = currentTMinusPos->LeafPosition->prev;
+                ListValue * sibling = neighbourNode->pointers[neighbourNode->numOfKeys - 1];
+                
+                //get the newest value in doubly linked list
+                currentTMinusPos->LeafPosition = currentTMinusPos->LeafPosition->prev;
+                currentTMinusPos->timeStampPosition = sibling->prev;
+                currentTMinusPos->indexPosition = neighbourNode->numOfKeys-1;
+            }
+            //is null
+            else{
+                
+                currentTMinusPos->timeStampPosition = NULL;
+            }
+        }
     }
-
+    
+    return currentTMinusPos;
 }
 
-void setTPlusAndTPlusOffset(Neighborhood *self, ListValue *tPlus, ListValue *offsetTPlus, double *value,  int additionalSteps){
+NeighborhoodPosition *  getTPlusNeighborHoodPosition(NeighborhoodPosition *currentTPlusPosition){
     bool isRightMostKey = false;
     
-    isRightMost(self, &isRightMostKey);
+    isRightMostKey = isRightMost(currentTPlusPosition);
     
-    Node * currentRightLeaf = self->currentRightLeaf;
-    ListValue * currentPlusListValue = self->posPlus;
+    int currentIndex = currentTPlusPosition->indexPosition;
     
-    tPlus = getTPlus(self, currentPlusListValue, currentRightLeaf, isRightMostKey, 0 + additionalSteps);
-    
-    int steps;
-    //offset timestamps
-    steps = self->patternLength - self->offset;
-    
-    if(steps<0){
-        //both need t minus method
-        offsetTPlus = getTMinus(self, currentPlusListValue, currentRightLeaf, isRightMostKey, abs(steps)+additionalSteps);
-        
+    if(currentTPlusPosition->timeStampPosition->next->timestamp > currentTPlusPosition->timeStampPosition->timestamp){
+        //update listValue Position
+        currentTPlusPosition->timeStampPosition = currentTPlusPosition->timeStampPosition->prev;
     }
     else{
-        offsetTPlus = getTPlus(self, currentPlusListValue, currentRightLeaf, isRightMostKey, steps+additionalSteps);
+        if(!isRightMostKey){
+       
+            int newIndexPostion = currentIndex + 1;
+            currentTPlusPosition->indexPosition = newIndexPostion;
+            currentTPlusPosition->timeStampPosition = ((ListValue *)currentTPlusPosition->LeafPosition->pointers[newIndexPostion])->next;
+            
+        }
+        else{
+            
+            if(currentTPlusPosition->LeafPosition->next != NULL){
+                
+                Node *neighbour = currentTPlusPosition->LeafPosition->next;
+                //newest value uf doubly linked list from left neighbour
+                ListValue *oldestSibling = neighbour->pointers[0];
+                
+                currentTPlusPosition->LeafPosition = currentTPlusPosition->LeafPosition->next;
+                currentTPlusPosition->timeStampPosition = oldestSibling;
+                currentTPlusPosition->indexPosition = 0;
+                
+            }
+            else{
+                currentTPlusPosition->timeStampPosition = NULL;
+            }
+        }
     }
-    
+
+    return currentTPlusPosition;
+
 }
-
-
 
 /*
  * Grows the neighborhood by one new value and returns its time point via the timestamp
@@ -404,197 +475,72 @@ void setTPlusAndTPlusOffset(Neighborhood *self, ListValue *tPlus, ListValue *off
  *   timestamp: used as a return value, contains the time point of the
  *              new still unseen value discovered by this function
  */
-bool Neighborhood_grow(Neighborhood *self, CircularArray *array, TimeSet *timeset, timeStampT *timestamp){
-    
-    double tMinusValue = self->currentLeftLeaf->keys[self->currentLeftPointerIndex];
-    double tPlusValue = self->currentRightLeaf->keys[self->currentRightPointerIndex];
 
+bool Neighborhood_grow(Neighborhood *self, TimeSet *timeset, timeStampT *timestamp){
     
-    ListValue * tMinus;
-    ListValue * tPlus;
+    NeighborhoodPosition *leftNeighborhoodPosition = NeighborhoodPosition_new();
+    NeighborhoodPosition *rightNeighborhoodPosition = NeighborhoodPosition_new();
     
-    ListValue * offsetTMinus;
-    ListValue * offsetTPlus;
+    leftNeighborhoodPosition = self->leftPosition;
+    rightNeighborhoodPosition = self->rightPosition;
     
-    int additionalSteps = 0;
+    bool neighborHoodHasGrown = true;
     
-    setTMinusAndTMinusOffset(self, tMinus, offsetTMinus, &tMinusValue, additionalSteps);
-    setTPlusAndTPlusOffset(self, tPlus, offsetTPlus, &tPlusValue, additionalSteps);
+    long step = (self->patternLength  - self->offset) * TIMESTAMP_DIFF;
+    
+    timeStampT tMinus = leftNeighborhoodPosition->timeStampPosition->timestamp;
+    timeStampT offsetMinusTime = tMinus + ((self->patternLength  - self->offset) * TIMESTAMP_DIFF);
 
+    timeStampT tPlus = rightNeighborhoodPosition->timeStampPosition->timestamp;
+    timeStampT offsetPlusTime = tPlus + ((self->patternLength  - self->offset) * TIMESTAMP_DIFF);
     
-    additionalSteps = 1;
-    while(tMinus != NULL && TimeSet_contains(self->timeSet, offsetTMinus->timestamp)){
-
-        setTMinusAndTMinusOffset(self, tMinus, offsetTMinus, &tMinusValue, additionalSteps);
-        additionalSteps++;
+    while(leftNeighborhoodPosition->timeStampPosition != NULL && TimeSet_contains(self->timeSet, offsetMinusTime)){
+        leftNeighborhoodPosition = getTMinusNeighborHoodPosition(leftNeighborhoodPosition);
     }
     
-    additionalSteps = 1;
-    while(tPlus != NULL && TimeSet_contains(self->timeSet, offsetTPlus->timestamp)){
+    while(rightNeighborhoodPosition->timeStampPosition != NULL && TimeSet_contains(self->timeSet, offsetPlusTime)){
+        rightNeighborhoodPosition = getTMinusNeighborHoodPosition(rightNeighborhoodPosition);
+    }
+    
+
+    long tMinusdifference = fabs(leftNeighborhoodPosition->LeafPosition->keys[leftNeighborhoodPosition->indexPosition] - self->key);
+    long tPlusdifference = fabs(rightNeighborhoodPosition->LeafPosition->keys[rightNeighborhoodPosition->indexPosition] - self->key);
+    
+    
+    if(leftNeighborhoodPosition->timeStampPosition != NULL && rightNeighborhoodPosition->timeStampPosition != NULL){
         
-        setTPlusAndTPlusOffset(self, tPlus, offsetTPlus, &tMinusValue, additionalSteps);
-        additionalSteps++;
-    }
-    
-    double tMinusValueNow;
-    double tPlusValueNow;
-
-    //evt nicht erlaubt
-    lookup(array, tMinus->timestamp, &tMinusValueNow);
-    lookup(array, tPlus->timestamp, &tPlusValueNow);
-
-    
-    if(tMinus != NULL && tPlus != NULL){
-        if(fabs(tMinusValueNow - tMinusValue)<= fabs(tPlusValueNow - tMinusValue)){
-            self->posMinus = tMinus;
-            *timestamp = tMinus->timestamp;
-
+        if(tMinusdifference <= tPlusdifference){
+            self->leftPosition = leftNeighborhoodPosition;
+            *timestamp = leftNeighborhoodPosition->timeStampPosition->timestamp;
         }
         else{
-            self->posPlus = tPlus;
-            *timestamp = tPlus->timestamp;
+            self->rightPosition = rightNeighborhoodPosition;
+            *timestamp = rightNeighborhoodPosition->timeStampPosition->timestamp;
 
         }
     }
-    else if(tMinus != NULL){
-        self->posMinus = tMinus;
-        *timestamp = tMinus->timestamp;
-
+    else if(leftNeighborhoodPosition->timeStampPosition != NULL){
+        self->leftPosition = leftNeighborhoodPosition;
+        *timestamp = leftNeighborhoodPosition->timeStampPosition->timestamp;
+        
     }
-    else if(tPlus != NULL){
-        self->posPlus = tPlus;
-        *timestamp = tPlus->timestamp;
+    else if(rightNeighborhoodPosition->timeStampPosition != NULL){
+        self->rightPosition = rightNeighborhoodPosition;
+        *timestamp = rightNeighborhoodPosition->timeStampPosition->timestamp;
     }
     else{
-        return false;
+        neighborHoodHasGrown = false;
     }
-    //add seen timestamp
-    TimeSet_add(timeset, timestamp);
     
-    return true;
+    //offset timestamp will be added later
+    
+    //destroy tempNeighborhoods
+    NeighborhoodPosition_destroy(leftNeighborhoodPosition);
+    NeighborhoodPosition_destroy(rightNeighborhoodPosition);
 
+    return neighborHoodHasGrown;
+    
 }
-
-ListValue * getTMinus(Neighborhood *self, ListValue * currentMinusListValue, Node *currentLeftLeaf, bool isLeftMostKey, int steps){
-    
-    ListValue * tMinus =NULL;
-    
-    int currentIndex = self->currentLeftPointerIndex;
-    
-    for(int i = 0; i<= steps; i++){
-        
-        //in doubly linked list
-        if(currentMinusListValue->prev->timestamp < currentMinusListValue->timestamp){
-            tMinus = currentMinusListValue->prev;
-            
-            //update
-            currentMinusListValue = tMinus;
-
-        }
-        
-        //needs to change key
-        else{
-            //same node
-            if(!isLeftMostKey){
-                //the newest list value of the key next to the current key
-                tMinus = ((ListValue *)currentLeftLeaf->pointers[currentIndex - 1])->prev;
-                
-                //update
-                currentMinusListValue = tMinus;
-                currentIndex = currentIndex-1;
-                
-                if(currentIndex == 0){
-                    //update
-                  isLeftMostKey = true;
-                }
-            }
-            //left neighbour
-            else{
-                
-                if(currentLeftLeaf->prev != NULL){
-                    Node *neighbour = currentLeftLeaf->prev;
-                    //newest value uf doubly linked list from left neighbour
-                    tMinus = ((ListValue *)neighbour->pointers[neighbour->numOfKeys])->prev;
-                    
-                    //update
-                    currentLeftLeaf = neighbour;
-                    currentMinusListValue = tMinus;
-                    
-                    if(neighbour->numOfKeys != 1){
-                        isLeftMostKey = false;
-                    }
-                }
-                //is null
-                else{
-                    tMinus = NULL;
-                    break;
-                }
-            }
-        }
-        
-    }
-    
-    return tMinus;
-}
-
-
-
-ListValue * getTPlus(Neighborhood *self, ListValue * currentPlusListValue, Node *currentPlusLeaf, bool isRightMostKey, int steps){
-    
-    ListValue * tPlus =NULL;
-
-    int currentIndex = self->currentRightPointerIndex;
-    
-    for(int i = 0; i<= steps; i++){
- 
-     
-    if(currentPlusListValue->next->timestamp > currentPlusListValue->timestamp){
-        tPlus= currentPlusListValue->next;
-
-        //update
-        currentPlusListValue = tPlus;
-        
-    }
-    else{
-        if(!isRightMostKey){
-            tPlus = (currentPlusLeaf->pointers[self->currentRightPointerIndex + 1]);
-            
-            
-            //update
-            currentPlusListValue = tPlus;
-            currentIndex = currentIndex+1;
-            
-            if(currentIndex == currentPlusLeaf->numOfKeys){
-                //update
-                isRightMostKey = true;
-            }
-
-        }
-        else{
-            if(currentPlusLeaf->next != NULL){
-                Node *neighbour = currentPlusLeaf->next;
-                //newest value uf doubly linked list from left neighbour
-                tPlus = ((ListValue *)neighbour->pointers[neighbour->numOfKeys])->next;
-                
-                if(neighbour->numOfKeys != 1){
-                    isRightMostKey = false;
-                }
-                
-                //update
-                currentPlusLeaf = neighbour;
-                currentPlusListValue = tPlus;
-            }
-            else{
-                tPlus = NULL;
-                break;
-                }
-            }
-        }
-    }
-              
-    return tPlus;
-}
-          
 
 /****************************** METHODS *******************************************************************/
 
@@ -611,7 +557,7 @@ int main(int argc, const char * argv[]) {
     
     //create BplusTree;
     BPlusTree * tree = BPlusTree_new(treeNodeSize);
-  //  exampleShifts(tree, array);
+    //  exampleShifts(tree, array);
     
     
     
@@ -646,12 +592,9 @@ void shift(BPlusTree *tree, CircularArray *array, timeStampT time, double value)
     
 }
 
-
-
 /****************************** PRINT TREE *******************************************************************/
 
-void random_shifts(BPlusTree * tree, CircularArray * array)
-{
+void random_shifts(BPlusTree * tree, CircularArray * array){
     srand(time(NULL));
     
     timeStampT time = 0;
@@ -668,7 +611,6 @@ void random_shifts(BPlusTree * tree, CircularArray * array)
     printLevelOrder(tree->root);
     
 }
-
 
 void exampleShifts(BPlusTree * tree, CircularArray * array){
     shift(tree, array, 300, 300);
@@ -701,10 +643,9 @@ void exampleShifts(BPlusTree * tree, CircularArray * array){
     shift(tree, array, 4200, 60);
     
     
-
+    
     
 }
-
 
 void addAndDeleteSomeExampleValuesFromTree(BPlusTree * tree){
     
@@ -829,7 +770,6 @@ void printLevelOrder(Node * root){
     }
 }
 
-
 /****************************** DELETION *******************************************************************/
 
 void deleteEntry(BPlusTree *tree, Node *node, double toDelete, Node * pointer){
@@ -890,7 +830,7 @@ void deleteEntry(BPlusTree *tree, Node *node, double toDelete, Node * pointer){
     else{
         capacity = tree->nodeSize;
     }
-   
+    
     
     //Merge - both nodes together have enough space
     if ((neighbor->numOfKeys + node->numOfKeys ) < capacity){
@@ -1152,9 +1092,9 @@ Node * removeEntryFromTheNode(BPlusTree *tree, Node * node, double toDelete, Nod
     // Remove the pointer and shift other pointers accordingly.
     // First determine number of pointers.
     if(!node->isLeaf){
-
+        
         numOfPointers = node->numOfKeys+1;
-    
+        
         y = 0;
         while (node->pointers[y] != pointerNode) {
             y++;
@@ -1162,7 +1102,7 @@ Node * removeEntryFromTheNode(BPlusTree *tree, Node * node, double toDelete, Nod
         for (++y; y < numOfPointers; y++){
             node->pointers[y - 1] = node->pointers[y];
         }
-    
+        
     }
     //one key is gone
     node->numOfKeys--;
@@ -1225,7 +1165,6 @@ void deleteFirstListValue(Node * leaf, int index){
     free(firstListValue);
     
 }
-
 
 /************************************* COMMONLY USED METHODS **************************************/
 
