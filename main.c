@@ -11,8 +11,7 @@
 #include <time.h>
 #include <math.h>
 #include <stddef.h>
-#include "uthash.h"
-#include "timeset.h"
+#include "timeset.c"
 
 /******************************TIMESTAMP DEF********************************************/
 
@@ -485,8 +484,6 @@ bool Neighborhood_grow(Neighborhood *self, TimeSet *timeset, timeStampT *timesta
     rightNeighborhoodPosition = self->rightPosition;
     
     bool neighborHoodHasGrown = true;
-    
-    long step = (self->patternLength  - self->offset) * TIMESTAMP_DIFF;
     
     timeStampT tMinus = leftNeighborhoodPosition->timeStampPosition->timestamp;
     timeStampT offsetMinusTime = tMinus + ((self->patternLength  - self->offset) * TIMESTAMP_DIFF);

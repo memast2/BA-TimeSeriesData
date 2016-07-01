@@ -2,6 +2,7 @@
 
 #include "timeset.h"
 #include "dbg.h"
+#include "uthash/uthash.h"
 
 
 TimeSet *TimeSet_new()
