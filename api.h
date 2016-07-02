@@ -4,12 +4,16 @@
 
 typedef unsigned long timestamp_t;
 
+/*
 typedef struct {
   timestamp_t timestamp;
   double value;
 } Measurement;
 
 
+Measurement * Measurement_new(timeStampT, )
+*/
+ 
 /*
  * Represents the combined data structure consisting of
  * the circular array and the B+ tree. You can call this

@@ -205,6 +205,13 @@ typedef struct Neighborhood{
 
 
 
+typedef struct {
+    timeStampT timestamp;
+    double value;
+} Measurement;
+
+
+
 
 /*************************************** MASTER METHOD *******************************************/
 
@@ -268,6 +275,21 @@ void Neighborhood_destroy(Neighborhood *self);
 ListValue * getTMinus(Neighborhood *self, ListValue * currentMinusListValue, Node *currentLeftLeaf, bool isLeftMostKey, int steps);
 ListValue * getTPlus(Neighborhood *self, ListValue * currentPlusListValue, Node *currentPlusLeaf, bool isRightMostKey, int steps);
 bool Neighborhood_grow(Neighborhood *self, TimeSet *timeset, timeStampT *timestamp);
+
+
+Measurement * Measurement_new(timeStampT time, double value){
+    Measurement * measurement = malloc(sizeof(Measurement));
+    measurement->timestamp = time;
+    measurement->value = value;
+    
+    return measurement;
+}
+
+void Measurement_destroy(Measurement *measurement){
+    
+    free(measurement);
+    
+}
 
 /*
  * Initializes a new neighborhood in the B+ tree.
@@ -423,9 +445,8 @@ NeighborhoodPosition * getTMinusNeighborHoodPosition(NeighborhoodPosition *curre
 }
 
 NeighborhoodPosition *  getTPlusNeighborHoodPosition(NeighborhoodPosition *currentTPlusPosition){
-    bool isRightMostKey = false;
     
-    isRightMostKey = isRightMost(currentTPlusPosition);
+    bool isRightMostKey = isRightMost(currentTPlusPosition);
     
     int currentIndex = currentTPlusPosition->indexPosition;
     
@@ -464,6 +485,14 @@ NeighborhoodPosition *  getTPlusNeighborHoodPosition(NeighborhoodPosition *curre
 
 }
 
+
+void print_Neighborhood(Neighborhood * neighborhood){
+    
+    printf("key %fl", neighborhood->key);
+    printf("\nleft timestamp %fl", (double)neighborhood->leftPosition->timeStampPosition->timestamp);
+    printf("\nright timestamp %fl\n",(double)neighborhood->rightPosition->timeStampPosition->timestamp);
+}
+
 /*
  * Grows the neighborhood by one new value and returns its time point via the timestamp
  * parameter. The function returns true if there was a new unseen value and false otherwise
@@ -480,17 +509,30 @@ bool Neighborhood_grow(Neighborhood *self, TimeSet *timeset, timeStampT *timesta
     NeighborhoodPosition *leftNeighborhoodPosition = NeighborhoodPosition_new();
     NeighborhoodPosition *rightNeighborhoodPosition = NeighborhoodPosition_new();
     
-    leftNeighborhoodPosition = self->leftPosition;
-    rightNeighborhoodPosition = self->rightPosition;
+    leftNeighborhoodPosition->indexPosition = self->leftPosition->indexPosition;
+    leftNeighborhoodPosition->LeafPosition = self->leftPosition->LeafPosition;
+    leftNeighborhoodPosition->timeStampPosition = self->leftPosition->timeStampPosition;
+    
+    rightNeighborhoodPosition->indexPosition = self->rightPosition->indexPosition;
+    rightNeighborhoodPosition->LeafPosition = self->rightPosition->LeafPosition;
+    rightNeighborhoodPosition->timeStampPosition = self->rightPosition->timeStampPosition;
     
     bool neighborHoodHasGrown = true;
     
-    timeStampT tMinus = leftNeighborhoodPosition->timeStampPosition->timestamp;
-    timeStampT offsetMinusTime = tMinus + ((self->patternLength  - self->offset) * TIMESTAMP_DIFF);
+    leftNeighborhoodPosition = getTMinusNeighborHoodPosition(leftNeighborhoodPosition);
+    timeStampT offsetMinusTime = leftNeighborhoodPosition->timeStampPosition->timestamp + ((self->patternLength  - self->offset) * TIMESTAMP_DIFF);
 
-    timeStampT tPlus = rightNeighborhoodPosition->timeStampPosition->timestamp;
-    timeStampT offsetPlusTime = tPlus + ((self->patternLength  - self->offset) * TIMESTAMP_DIFF);
+    rightNeighborhoodPosition = getTPlusNeighborHoodPosition(rightNeighborhoodPosition);
+    timeStampT offsetPlusTime = rightNeighborhoodPosition->timeStampPosition->timestamp + ((self->patternLength  - self->offset) * TIMESTAMP_DIFF);
     
+    
+    printf("\tminus %fl", (double) leftNeighborhoodPosition->timeStampPosition->timestamp);
+    printf("\tplus %fl", (double) rightNeighborhoodPosition->timeStampPosition->timestamp);
+    
+    printf("\noffsetTMinus %fl", (double) offsetMinusTime);
+    printf("\noffsetPlusTime %fl", (double) offsetPlusTime);
+    
+    //checks if offsetTime is in timestamp set
     while(leftNeighborhoodPosition->timeStampPosition != NULL && TimeSet_contains(self->timeSet, offsetMinusTime)){
         leftNeighborhoodPosition = getTMinusNeighborHoodPosition(leftNeighborhoodPosition);
     }
@@ -532,12 +574,13 @@ bool Neighborhood_grow(Neighborhood *self, TimeSet *timeset, timeStampT *timesta
     //offset timestamp will be added later
     
     //destroy tempNeighborhoods
-    NeighborhoodPosition_destroy(leftNeighborhoodPosition);
-    NeighborhoodPosition_destroy(rightNeighborhoodPosition);
+   // free(leftNeighborhoodPosition);
+   // free(rightNeighborhoodPosition);
 
     return neighborHoodHasGrown;
     
 }
+
 
 /****************************** METHODS *******************************************************************/
 
@@ -554,25 +597,30 @@ int main(int argc, const char * argv[]) {
     
     //create BplusTree;
     BPlusTree * tree = BPlusTree_new(treeNodeSize);
-    //  exampleShifts(tree, array);
-    
-    
+    exampleShifts(tree, array);
     
     CircularArray * array2 = CircularArray_new(arraySize);
     initialize_data(array2);
     
+    
     //create BplusTree;
     BPlusTree * tree2 = BPlusTree_new(treeNodeSize);
-    random_shifts(tree2, array2);
+    //random_shifts(tree2, array2);
     
+    Measurement * newMeasurement = Measurement_new(3900, 50);
+    int patternLength = 4;
+    int offset = 2;
+    Neighborhood *newNeighborhood = Neighborhood_new(tree, newMeasurement, patternLength, offset);
+
+    timeStampT *foundTimestamp;
     
-    /*****************neighbour methode**********/
-    /*int size = 5;
-     timestamp_t searchedTime;
-     timeStampSet * set = timeStampSet_new(size);*/
+    Neighborhood_grow(newNeighborhood, newNeighborhood->timeSet, foundTimestamp);
+    Neighborhood_grow(newNeighborhood, newNeighborhood->timeSet, foundTimestamp);
+    Neighborhood_grow(newNeighborhood, newNeighborhood->timeSet, foundTimestamp);
+
     
-    //double searchValue;
-    //searchedTime = neighbor(tree, searchValue, set);
+    print_Neighborhood(newNeighborhood);
+
     
     BPlusTree_destroy(tree);
     CircularArray_destroy(array);
@@ -613,20 +661,10 @@ void exampleShifts(BPlusTree * tree, CircularArray * array){
     shift(tree, array, 300, 300);
     shift(tree, array, 600, 200);
     shift(tree, array, 900, 600);
-    printf("\n \n");
-    
-    
-    printLevelOrder(tree->root);
-    
     
     shift(tree, array, 1200, 600);
     shift(tree, array, 1500, 1200);
-    
-    printf("\n \n");
-    
-    
-    printLevelOrder(tree->root);
-    
+
     shift(tree, array, 1800, 1500);
     shift(tree, array, 2700, 2100);
     //arrive late
@@ -639,6 +677,10 @@ void exampleShifts(BPlusTree * tree, CircularArray * array){
     shift(tree, array, 3900, 50);
     shift(tree, array, 4200, 60);
     
+    printf("\n \n");
+    
+    
+    printLevelOrder(tree->root);
     
     
     
@@ -766,6 +808,7 @@ void printLevelOrder(Node * root){
         printf("\n");
     }
 }
+
 
 /****************************** DELETION *******************************************************************/
 
@@ -1624,7 +1667,8 @@ void serie_update(BPlusTree *tree, CircularArray *array, timeStampT newTime, dou
         
         int positionStep = (int)(newTime - array->data[lastUpdatePosition].time)/TIMESTAMP_DIFF;
         
-        printf("last Update Pos was: %d\n", lastUpdatePosition);
+        //debug
+        //printf("last Update Pos was: %d\n", lastUpdatePosition);
         
         int i = 1;
         if(positionStep < 0){
@@ -1671,13 +1715,13 @@ void serie_update(BPlusTree *tree, CircularArray *array, timeStampT newTime, dou
             
         }
         
-        
+        /*
         printf("Elements in Serie:\n");
         for (int i = 0; i < array->size; i++) {
             printf("%.2fl ", array->data[i].value);
         }
         printf("\n");
-        
+        */
     }
 }
 
