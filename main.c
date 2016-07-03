@@ -312,6 +312,8 @@ Neighborhood *Neighborhood_new(BPlusTree *tree, Measurement *measurement,int pat
     newNeighborhood->key = measurement->value;
     
     TimeSet *newTimeSet = TimeSet_new();
+    
+    //???find out if the value is added to the timeset or not when initialized
     TimeSet_add(newTimeSet, measurement->timestamp);
     
     newNeighborhood->offset = offset;
@@ -373,7 +375,8 @@ void NeighborhoodPosition_destroy(NeighborhoodPosition * nPosition){
  *   self: the Neighborhood
  */
 void Neighborhood_destroy(Neighborhood *self){
-    
+    free(self->leftPosition);
+    free(self->rightPosition);
     TimeSet_destroy(&self->timeSet);
     free(self);
 }
@@ -456,7 +459,7 @@ NeighborhoodPosition *  getTPlusNeighborHoodPosition(NeighborhoodPosition *curre
     }
     else{
         if(!isRightMostKey){
-       
+            
             int newIndexPostion = currentIndex + 1;
             currentTPlusPosition->indexPosition = newIndexPostion;
             currentTPlusPosition->timeStampPosition = ((ListValue *)currentTPlusPosition->LeafPosition->pointers[newIndexPostion])->next;
@@ -480,9 +483,9 @@ NeighborhoodPosition *  getTPlusNeighborHoodPosition(NeighborhoodPosition *curre
             }
         }
     }
-
+    
     return currentTPlusPosition;
-
+    
 }
 
 
@@ -521,27 +524,33 @@ bool Neighborhood_grow(Neighborhood *self, TimeSet *timeset, timeStampT *timesta
     
     leftNeighborhoodPosition = getTMinusNeighborHoodPosition(leftNeighborhoodPosition);
     timeStampT offsetMinusTime = leftNeighborhoodPosition->timeStampPosition->timestamp + ((self->patternLength  - self->offset) * TIMESTAMP_DIFF);
-
+    
     rightNeighborhoodPosition = getTPlusNeighborHoodPosition(rightNeighborhoodPosition);
     timeStampT offsetPlusTime = rightNeighborhoodPosition->timeStampPosition->timestamp + ((self->patternLength  - self->offset) * TIMESTAMP_DIFF);
     
     
-    printf("\tminus %fl", (double) leftNeighborhoodPosition->timeStampPosition->timestamp);
-    printf("\tplus %fl", (double) rightNeighborhoodPosition->timeStampPosition->timestamp);
+    printf("\ntminus %fl", (double) leftNeighborhoodPosition->timeStampPosition->timestamp);
+    printf("\ntplus %fl", (double) rightNeighborhoodPosition->timeStampPosition->timestamp);
     
     printf("\noffsetTMinus %fl", (double) offsetMinusTime);
     printf("\noffsetPlusTime %fl", (double) offsetPlusTime);
     
+
+    
     //checks if offsetTime is in timestamp set
     while(leftNeighborhoodPosition->timeStampPosition != NULL && TimeSet_contains(self->timeSet, offsetMinusTime)){
         leftNeighborhoodPosition = getTMinusNeighborHoodPosition(leftNeighborhoodPosition);
+        offsetMinusTime = leftNeighborhoodPosition->timeStampPosition->timestamp + ((self->patternLength  - self->offset) * TIMESTAMP_DIFF);
+        printf("\noffsetTMinus %fl", (double) offsetMinusTime);
     }
     
     while(rightNeighborhoodPosition->timeStampPosition != NULL && TimeSet_contains(self->timeSet, offsetPlusTime)){
-        rightNeighborhoodPosition = getTMinusNeighborHoodPosition(rightNeighborhoodPosition);
+        rightNeighborhoodPosition = getTPlusNeighborHoodPosition(rightNeighborhoodPosition);
+        offsetPlusTime = rightNeighborhoodPosition->timeStampPosition->timestamp + ((self->patternLength  - self->offset) * TIMESTAMP_DIFF);
+        printf("\noffsetPlusTime %fl", (double) offsetPlusTime);
     }
     
-
+    
     long tMinusdifference = fabs(leftNeighborhoodPosition->LeafPosition->keys[leftNeighborhoodPosition->indexPosition] - self->key);
     long tPlusdifference = fabs(rightNeighborhoodPosition->LeafPosition->keys[rightNeighborhoodPosition->indexPosition] - self->key);
     
@@ -555,7 +564,7 @@ bool Neighborhood_grow(Neighborhood *self, TimeSet *timeset, timeStampT *timesta
         else{
             self->rightPosition = rightNeighborhoodPosition;
             *timestamp = rightNeighborhoodPosition->timeStampPosition->timestamp;
-
+            
         }
     }
     else if(leftNeighborhoodPosition->timeStampPosition != NULL){
@@ -570,13 +579,19 @@ bool Neighborhood_grow(Neighborhood *self, TimeSet *timeset, timeStampT *timesta
     else{
         neighborHoodHasGrown = false;
     }
+
+    
+    printf("\ntfound %fl\n", (double) *timestamp);
+
+
     
     //offset timestamp will be added later
     
     //destroy tempNeighborhoods
+    //HOW TO DESTROY THE NEIGHBORHOODPOSITIONS?
    // free(leftNeighborhoodPosition);
    // free(rightNeighborhoodPosition);
-
+    
     return neighborHoodHasGrown;
     
 }
@@ -611,16 +626,18 @@ int main(int argc, const char * argv[]) {
     int patternLength = 4;
     int offset = 2;
     Neighborhood *newNeighborhood = Neighborhood_new(tree, newMeasurement, patternLength, offset);
-
+    
     timeStampT *foundTimestamp;
     
     Neighborhood_grow(newNeighborhood, newNeighborhood->timeSet, foundTimestamp);
     Neighborhood_grow(newNeighborhood, newNeighborhood->timeSet, foundTimestamp);
     Neighborhood_grow(newNeighborhood, newNeighborhood->timeSet, foundTimestamp);
-
+    
     
     print_Neighborhood(newNeighborhood);
-
+    
+    Neighborhood_destroy(newNeighborhood);
+    
     
     BPlusTree_destroy(tree);
     CircularArray_destroy(array);
@@ -664,7 +681,7 @@ void exampleShifts(BPlusTree * tree, CircularArray * array){
     
     shift(tree, array, 1200, 600);
     shift(tree, array, 1500, 1200);
-
+    
     shift(tree, array, 1800, 1500);
     shift(tree, array, 2700, 2100);
     //arrive late
@@ -680,7 +697,7 @@ void exampleShifts(BPlusTree * tree, CircularArray * array){
     printf("\n \n");
     
     
-    printLevelOrder(tree->root);
+  //  printLevelOrder(tree->root);
     
     
     
@@ -1716,12 +1733,12 @@ void serie_update(BPlusTree *tree, CircularArray *array, timeStampT newTime, dou
         }
         
         /*
-        printf("Elements in Serie:\n");
-        for (int i = 0; i < array->size; i++) {
-            printf("%.2fl ", array->data[i].value);
-        }
-        printf("\n");
-        */
+         printf("Elements in Serie:\n");
+         for (int i = 0; i < array->size; i++) {
+         printf("%.2fl ", array->data[i].value);
+         }
+         printf("\n");
+         */
     }
 }
 
