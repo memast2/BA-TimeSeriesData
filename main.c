@@ -558,22 +558,36 @@ bool Neighborhood_grow(Neighborhood *self, TimeSet *timeset, timeStampT *timesta
     if(leftNeighborhoodPosition->timeStampPosition != NULL && rightNeighborhoodPosition->timeStampPosition != NULL){
         
         if(tMinusdifference <= tPlusdifference){
-            self->leftPosition = leftNeighborhoodPosition;
+            self->leftPosition->indexPosition = leftNeighborhoodPosition->indexPosition;
+            self->leftPosition->LeafPosition = leftNeighborhoodPosition->LeafPosition;
+            self->leftPosition->timeStampPosition =  leftNeighborhoodPosition->timeStampPosition;
+
+            //This is not working if I want to free the neighboorposition later so I decided to pass every value
+            //self->leftPosition = leftNeighborhoodPosition;
             *timestamp = leftNeighborhoodPosition->timeStampPosition->timestamp;
         }
         else{
-            self->rightPosition = rightNeighborhoodPosition;
+            self->rightPosition->indexPosition = rightNeighborhoodPosition->indexPosition;
+            self->rightPosition->LeafPosition = rightNeighborhoodPosition->LeafPosition;
+            self->rightPosition->timeStampPosition = rightNeighborhoodPosition->timeStampPosition;
+            
             *timestamp = rightNeighborhoodPosition->timeStampPosition->timestamp;
             
         }
     }
     else if(leftNeighborhoodPosition->timeStampPosition != NULL){
-        self->leftPosition = leftNeighborhoodPosition;
+        self->leftPosition->indexPosition = leftNeighborhoodPosition->indexPosition;
+        self->leftPosition->LeafPosition = leftNeighborhoodPosition->LeafPosition;
+        self->leftPosition->timeStampPosition =  leftNeighborhoodPosition->timeStampPosition;
+        
         *timestamp = leftNeighborhoodPosition->timeStampPosition->timestamp;
         
     }
     else if(rightNeighborhoodPosition->timeStampPosition != NULL){
-        self->rightPosition = rightNeighborhoodPosition;
+        self->rightPosition->indexPosition = rightNeighborhoodPosition->indexPosition;
+        self->rightPosition->LeafPosition = rightNeighborhoodPosition->LeafPosition;
+        self->rightPosition->timeStampPosition =  rightNeighborhoodPosition->timeStampPosition;
+        
         *timestamp = rightNeighborhoodPosition->timeStampPosition->timestamp;
     }
     else{
@@ -588,9 +602,8 @@ bool Neighborhood_grow(Neighborhood *self, TimeSet *timeset, timeStampT *timesta
     //offset timestamp will be added later
     
     //destroy tempNeighborhoods
-    //HOW TO DESTROY THE NEIGHBORHOODPOSITIONS?
-   // free(leftNeighborhoodPosition);
-   // free(rightNeighborhoodPosition);
+    free(leftNeighborhoodPosition);
+    free(rightNeighborhoodPosition);
     
     return neighborHoodHasGrown;
     
@@ -692,13 +705,14 @@ void exampleShifts(BPlusTree * tree, CircularArray * array){
     shift(tree, array, 3300, 10);
     shift(tree, array, 3600, 20);
     shift(tree, array, 3900, 50);
-    shift(tree, array, 4200, 60);
+    shift(tree, array, 4200, 50);
+
+    shift(tree, array, 4500, 60);
     
     printf("\n \n");
     
     
-  //  printLevelOrder(tree->root);
-    
+    printLevelOrder(tree->root);
     
     
 }
