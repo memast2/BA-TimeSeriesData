@@ -53,20 +53,6 @@ void CircularArray_destroy(CircularArray *array) {
     free(array);
 }
 
-typedef struct TimeStampSet{
-    int size;
-    timeStampT * timeStamps;
-}TimeStampSet;
-
-TimeStampSet * timeStampSet_new(int size){
-    TimeStampSet * newTimeStampSet = malloc(size * sizeof(TimeStampSet));
-    newTimeStampSet->size = size;
-    return newTimeStampSet;
-}
-
-void timeStampSet_destroy(TimeStampSet * timeStampSet){
-    free(timeStampSet);
-}
 
 /******************************STRUCTS - DOUBLY LINKED LIST AND LEAF KEYS********************************************/
 
@@ -77,8 +63,7 @@ typedef struct ListValue{
 
 
 ListValue *listValue_new(timeStampT time) {
-    ListValue *newListValue = NULL;
-    newListValue = malloc(sizeof(ListValue));
+    ListValue *newListValue = malloc(sizeof(ListValue));
     newListValue->timestamp = time;
     
     //link to same value
@@ -92,14 +77,17 @@ ListValue *listValue_new(timeStampT time) {
 
 void list_destroy(ListValue *head) {
     
-    ListValue * temp;
-    while(head->prev != head->next)
+    ListValue * next;
+   /* while(head->next != head && head->timestamp != 0)
     {
-        temp = head;
+        next = head;
         head = head->next;
-        free(temp);
+        free(next);
     }
-    free(head);
+   */
+    if(head->timestamp != 0){
+        free(head);
+    }
 }
 
 
@@ -120,21 +108,27 @@ typedef struct Node{
 
 
 Node * Node_new(int nodeSize){
-    Node * node =NULL;
-    node = malloc(sizeof(Node));
-    node->keys = malloc(nodeSize * sizeof(void *));
+    Node * node = malloc(sizeof(Node));
+    node->keys = malloc(nodeSize * sizeof(double));
     node->numOfKeys = 0;
     //always n+1 pointers
     node->isLeaf = false;
-    node->pointers = malloc((nodeSize + 1) * sizeof(void *));
+    node->pointers = malloc((nodeSize + 1) * sizeof(Node));
     node->next = NULL;
     node->prev = NULL;
     return node;
 }
 
 Node *Leaf_new(int nodeSize){
-    Node *node = Node_new(nodeSize);
+    Node * node = malloc(sizeof(Node));
+    node->keys = malloc(nodeSize * sizeof(double));
+    node->numOfKeys = 0;
+    //always n pointers
     node->isLeaf = true;
+    node->pointers = malloc((nodeSize) * sizeof(ListValue));
+    node->next = NULL;
+    node->prev = NULL;
+
     return node;
 }
 
@@ -158,34 +152,36 @@ typedef struct BPlusTree{
 }BPlusTree;
 
 BPlusTree *BPlusTree_new(int nodeSize) {
-    BPlusTree *bPlus = NULL;
-    bPlus = malloc(sizeof(BPlusTree));
+    BPlusTree *bPlus = malloc(sizeof(BPlusTree));
     bPlus->nodeSize = nodeSize;
-    bPlus->root = malloc(sizeof(Node));
     bPlus->root = NULL;
     return bPlus;
 }
 
-//TODO MEMORY LEAKS STILL A LOT
 void destroyTreeNodes(Node * node) {
+    int i;
     
-    
-    if(node == NULL){
-        return;
+    if (node->isLeaf){
+        for (i = 0; i < node->numOfKeys; i++){
+            list_destroy(node->pointers[i]);
+        }
+        
+    }else{
+        for (i = 0; i < node->numOfKeys + 1; i++){
+            destroyTreeNodes(node->pointers[i]);
+        }
+        
     }
-    //   destroyTreeNodes(node->pointers[0]);
-    // destroyTreeNodes(node->pointers[1]);
     
-    
+    free(node->pointers);
+    free(node->keys);
     free(node);
 }
 
 
-Node * BPlusTree_destroy(BPlusTree *tree) {
-    
+void BPlusTree_destroy(BPlusTree *tree) {
     destroyTreeNodes(tree->root);
     free(tree);
-    return NULL;
 }
 
 typedef struct NeighborhoodPosition{
@@ -224,7 +220,7 @@ void serie_update(BPlusTree *tree, CircularArray *array, timeStampT t, double va
 void initialize_data(CircularArray *array);
 
 /*************************************** NEIGHBOUR *******************************************/
-timeStampT neighbor(BPlusTree *tree, double value, TimeStampSet * set);
+timeStampT neighbor(BPlusTree *tree, double value, TimeSet * set);
 
 void initialize_tree(BPlusTree *tree);
 
@@ -319,7 +315,13 @@ Neighborhood *Neighborhood_new(BPlusTree *tree, Measurement *measurement,int pat
     leafNode = findLeaf(tree, measurement->value);
     int pointerIndex = findLeafKeyIndexAndSetboolIfMultipleListValues(leafNode, measurement->value, &hasMultipleTimes);
     
-    ListValue *listValueOnThatKey =leafNode->pointers[pointerIndex];
+    ListValue *listValueOnThatKey = NULL;
+    listValueOnThatKey = leafNode->pointers[pointerIndex];
+    
+    if(!listValueOnThatKey){
+        printf("value was not found");
+        return NULL;
+    }
     
     /*
      * @Feedback
@@ -328,12 +330,19 @@ Neighborhood *Neighborhood_new(BPlusTree *tree, Measurement *measurement,int pat
      * while loop? Does the pattern length have an influence here?
      */
     //TODO
-    int maxLength = patternLength;
-    while(listValueOnThatKey->timestamp != measurement->timestamp){
-        listValueOnThatKey = listValueOnThatKey->next;
-        maxLength--;
-    }
+    ListValue *oldestTimeInList = listValueOnThatKey;
     
+    //is difference to oldest timestamp bigger than to newest timestamp in the list
+    if((oldestTimeInList->timestamp) - measurement->timestamp >= (measurement->timestamp - oldestTimeInList->prev->timestamp)){
+        while(listValueOnThatKey->timestamp != measurement->timestamp){
+            listValueOnThatKey = listValueOnThatKey->prev;
+        }
+    }
+    else{
+        while(listValueOnThatKey->timestamp != measurement->timestamp){
+            listValueOnThatKey = listValueOnThatKey->next;
+        }
+    }
     leftNeighbourhoodPos.indexPosition = pointerIndex;
     leftNeighbourhoodPos.LeafPosition = leafNode;
     leftNeighbourhoodPos.timeStampPosition = listValueOnThatKey;
@@ -350,20 +359,12 @@ Neighborhood *Neighborhood_new(BPlusTree *tree, Measurement *measurement,int pat
     
 }
 
-void NeighborhoodPosition_destroy(NeighborhoodPosition self){
-    free(self.LeafPosition);
-    free(self.timeStampPosition);
-}
-
 /*
  * Destroys the Neighborhood and frees all allocated memory
- *
  * Parameters:
  *   self: the Neighborhood
  */
 void Neighborhood_destroy(Neighborhood *self){
-    NeighborhoodPosition_destroy(self->leftPosition);
-    NeighborhoodPosition_destroy(self->rightPosition);
     free(self);
 }
 
@@ -505,21 +506,31 @@ bool Neighborhood_grow(Neighborhood *self, TimeSet *timeset, timeStampT *timesta
     
     NeighborhoodPosition leftNeighborhoodPosition = leftNeighborhoodPosition = self->leftPosition;
     NeighborhoodPosition rightNeighborhoodPosition = rightNeighborhoodPosition = self->rightPosition;
-
+    
     
     bool neighborHoodHasGrown = true;
     
+    timeStampT offsetMinusTime = INFINITY;
+    timeStampT offsetPlusTime = INFINITY;
+    
     leftNeighborhoodPosition = getTMinusNeighborHoodPosition(leftNeighborhoodPosition);
-    timeStampT offsetMinusTime = getOffsetTime(self, leftNeighborhoodPosition);
+    if(leftNeighborhoodPosition.timeStampPosition != NULL){
+        offsetMinusTime = getOffsetTime(self, leftNeighborhoodPosition);
+    }
+    
     rightNeighborhoodPosition = getTPlusNeighborHoodPosition(rightNeighborhoodPosition);
-    timeStampT offsetPlusTime = getOffsetTime(self, rightNeighborhoodPosition);
+    if(rightNeighborhoodPosition.timeStampPosition != NULL){
+        offsetPlusTime = getOffsetTime(self, rightNeighborhoodPosition);
+    }
+
     
-    
-    printf("\ntminus %fl", (double) leftNeighborhoodPosition.timeStampPosition->timestamp);
-    printf("\ntplus %fl", (double) rightNeighborhoodPosition.timeStampPosition->timestamp);
-    
-    printf("\noffsetTMinus %fl", (double) offsetMinusTime);
-    printf("\noffsetPlusTime %fl", (double) offsetPlusTime);
+    if(leftNeighborhoodPosition.timeStampPosition != NULL && rightNeighborhoodPosition.timeStampPosition != NULL){
+        printf("\ntminus %fl", (double) leftNeighborhoodPosition.timeStampPosition->timestamp);
+        printf("\ntplus %fl", (double) rightNeighborhoodPosition.timeStampPosition->timestamp);
+        
+        printf("\noffsetTMinus %fl", (double) offsetMinusTime);
+        printf("\noffsetPlusTime %fl", (double) offsetPlusTime);
+    }
     
     
     
@@ -539,15 +550,19 @@ bool Neighborhood_grow(Neighborhood *self, TimeSet *timeset, timeStampT *timesta
     }
     
     
-    /*
-     * @Feedback
-     * If you reached the leftmost/rightmost position this couldn't exist?
-     */
-    long tMinusdifference = fabs(leftNeighborhoodPosition.LeafPosition->keys[leftNeighborhoodPosition.indexPosition] - self->key);
-    long tPlusdifference = fabs(rightNeighborhoodPosition.LeafPosition->keys[rightNeighborhoodPosition.indexPosition] - self->key);
     
     
     if(leftNeighborhoodPosition.timeStampPosition != NULL && rightNeighborhoodPosition.timeStampPosition != NULL){
+        
+        /*
+         * @Feedback
+         * If you reached the leftmost/rightmost position this couldn't exist?
+         
+         * @Solution I inserted the differences into the if and not like before outside
+         */
+        long tMinusdifference = fabs(leftNeighborhoodPosition.LeafPosition->keys[leftNeighborhoodPosition.indexPosition] - self->key);
+        long tPlusdifference = fabs(rightNeighborhoodPosition.LeafPosition->keys[rightNeighborhoodPosition.indexPosition] - self->key);
+        
         
         if(tMinusdifference <= tPlusdifference){
             
@@ -603,13 +618,13 @@ int main(int argc, const char * argv[]) {
     BPlusTree * tree = BPlusTree_new(treeNodeSize);
     exampleShifts(tree, array);
     
-    CircularArray * array2 = CircularArray_new(arraySize);
-    initialize_data(array2);
+    // CircularArray * array2 = CircularArray_new(arraySize);
+    // initialize_data(array2);
     
     
     //create BplusTree;
-    BPlusTree * tree2 = BPlusTree_new(treeNodeSize);
-    random_shifts(tree2, array2);
+    // BPlusTree * tree2 = BPlusTree_new(treeNodeSize);
+    // random_shifts(tree2, array2);
     
     Measurement * newMeasurement = Measurement_new(3900, 50);
     int patternLength = 4;
@@ -622,22 +637,20 @@ int main(int argc, const char * argv[]) {
     TimeSet *timeSet = TimeSet_new();
     TimeSet_add(timeSet, 3900);
     
-
     
     Neighborhood_grow(newNeighborhood, timeSet, &foundTimestamp);
     Neighborhood_grow(newNeighborhood, timeSet, &foundTimestamp);
     Neighborhood_grow(newNeighborhood, timeSet, &foundTimestamp);
     
     
-    print_Neighborhood(newNeighborhood);
+    //   print_Neighborhood(newNeighborhood);
     
-    Neighborhood_destroy(newNeighborhood);
-    
-    
+    TimeSet_destroy(&timeSet);
     BPlusTree_destroy(tree);
+    Neighborhood_destroy(newNeighborhood);
     CircularArray_destroy(array);
-    BPlusTree_destroy(tree2);
-    CircularArray_destroy(array2);
+    // BPlusTree_destroy(tree2);
+    //   CircularArray_destroy(array2);
     
     return 0;
 }
@@ -658,7 +671,7 @@ void random_shifts(BPlusTree * tree, CircularArray * array){
     for (int i = 0; i < 500; ++i) {
         time += TIMESTAMP_DIFF;
         double rand_value = rand() % 10;
-        printf("inserting time: %ld, value: %f\n", time, rand_value);
+        //printf("inserting time: %ld, value: %f\n", time, rand_value);
         shift(tree, array, time, rand_value);
     }
     
@@ -670,8 +683,9 @@ void random_shifts(BPlusTree * tree, CircularArray * array){
 }
 
 void exampleShifts(BPlusTree * tree, CircularArray * array){
-    shift(tree, array, 300, 300);
-    shift(tree, array, 600, 200);
+
+  shift(tree, array, 300, 300);
+  shift(tree, array, 600, 200);
     shift(tree, array, 900, 600);
     
     shift(tree, array, 1200, 600);
@@ -687,88 +701,15 @@ void exampleShifts(BPlusTree * tree, CircularArray * array){
     shift(tree, array, 3300, 10);
     shift(tree, array, 3600, 20);
     shift(tree, array, 3900, 50);
+
     shift(tree, array, 4200, 50);
+   
     
     shift(tree, array, 4500, 60);
-    
     printf("\n \n");
     
     
     printLevelOrder(tree->root);
-    
-    
-}
-
-void addAndDeleteSomeExampleValuesFromTree(BPlusTree * tree){
-    
-    addRecordToTree(tree, 300, 300);
-    addRecordToTree(tree, 600, 300);
-    addRecordToTree(tree, 900, 600);
-    
-    addRecordToTree(tree, 1200, 600);
-    addRecordToTree(tree, 1500, 1200);
-    
-    addRecordToTree(tree, 1800, 1500);
-    addRecordToTree(tree, 2100, 1800);
-    
-    addRecordToTree(tree, 2300, 900);
-    addRecordToTree(tree, 2400, 2100);
-    
-    addRecordToTree(tree, 3300, 2400);
-    addRecordToTree(tree, 3600, 2500);
-    
-    addRecordToTree(tree, 3900, 2600);
-    printf("\n \n");
-    
-    printLevelOrder(tree->root);
-    
-    addRecordToTree(tree, 4200, 2700);
-    addRecordToTree(tree, 4500, 1400);
-    addRecordToTree(tree, 4800, 1400);
-    
-    printf("\n \n");
-    
-    
-    printLevelOrder(tree->root);
-    addRecordToTree(tree, 5100, 1600);
-    addRecordToTree(tree, 5400, 1100);
-    addRecordToTree(tree, 5700, 1100);
-    
-    
-    printf("\n \n");
-    
-    
-    printLevelOrder(tree->root);
-    
-    delete(tree, 3900, 2600);
-    printf("\n \n");
-    
-    
-    printLevelOrder(tree->root);
-    delete(tree, 4500, 1400);
-    printf("\n \n");
-    
-    
-    printLevelOrder(tree->root);
-    delete(tree, 4800, 1400);
-    printf("\n \n");
-    
-    
-    printLevelOrder(tree->root);
-    delete(tree, 2400, 2100);
-    printf("\n \n");
-    
-    
-    printLevelOrder(tree->root);
-    delete(tree, 5100, 1600);
-    delete(tree, 1800, 1500);
-    
-    
-    printf("\n \n");
-    
-    
-    printLevelOrder(tree->root);
-    
     
     
 }
@@ -787,13 +728,12 @@ int height(Node * node){
 
 // Print nodes at a given level
 void printGivenLevel(Node * root, int level){
-    if (root == NULL)
-        return;
-    
-    if (level == 1){
+    if (root == NULL){
+    }
+    else if (level == 1){
         
         for(int i = 0; i < root->numOfKeys; i++){
-            printf(" %.fl ", root->keys[i]);
+            printf(" %fl ", root->keys[i]);
         }
         printf("\t \t");
         
@@ -920,12 +860,9 @@ void redestributeNodes(BPlusTree * tree, Node * node, Node * neighbor, int neigh
             tmp->parent = node;
             neighbor->pointers[neighbor->numOfKeys] = NULL;
             node->keys[0] = kPrime;
-            /*
-             * @Feedback
-             * I don't quite understand why you take here the last element
-             * from the neighbor instead of the first value of the node?
-             */
-            node->parent->keys[kIndex] = node->keys[0];
+            
+            //clear reason
+            node->parent->keys[kIndex] = neighbor->keys[neighbor->numOfKeys-1];
             
         }
         else {
@@ -1234,7 +1171,6 @@ Node * findLeaf(BPlusTree *tree, double newKey){
     while (!curNode->isLeaf) {
         
         i = getInsertPoint(tree, curNode, newKey);
-        
         //new lookup node
         curNode = (Node *)curNode->pointers[i];
     }
@@ -1272,17 +1208,16 @@ void addRecordToTree(BPlusTree *tree, timeStampT time, double value){
     //if duplicate -> insert to leaf as Doubly linked list value
     if(isDuplicateKey(leaf, time, value)){
         addDuplicateToDoublyLinkedList(leaf, time, value);
-        return;
+        
     }
-    
-    // leaf has room for key and pointer
-    if (leaf->numOfKeys < tree->nodeSize) {
+    else if(leaf->numOfKeys < tree->nodeSize) {
         insertRecordIntoLeaf(tree, leaf, time, value);
-        return;
     }
-    
-    //leaf must be split
-    splitAndInsertIntoLeaves(tree, leaf, time, value);
+    else{
+        //leaf must be split
+        splitAndInsertIntoLeaves(tree, leaf, time, value);
+    }
+
     
 }
 
@@ -1415,7 +1350,6 @@ void splitAndInsertIntoLeaves(BPlusTree *tree, Node *oldNode, timeStampT time, d
     
     //free allocated memory of pointers
     free(tempKeys);
-    //memory leak?
     free(tempPointers);
     
     insertIntoParent(tree, oldNode, keyForParent, newNode);
@@ -1541,14 +1475,17 @@ void splitAndInsertIntoInnerNode(BPlusTree *tree, Node * oldInnerNode, int index
         newInnerNode->keys[j] = tempKeys[x];
     }
     newInnerNode->pointers[j] = tempPointers[x];
-    free(tempKeys);
-    free(tempPointers);
+    
     
     //set parent to new node
     for (int i = 0; i < newInnerNode->numOfKeys + 1; i++) {
         Node * childOfNewNode = newInnerNode->pointers[i];
         childOfNewNode->parent = newInnerNode;
     }
+    
+    //free allocated memory
+    free(tempKeys);
+    free(tempPointers);
     
     //old node to the left and new Node to the right
     insertIntoParent(tree, oldInnerNode, leftMostKey, newInnerNode);
