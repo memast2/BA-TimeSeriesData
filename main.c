@@ -77,14 +77,15 @@ ListValue *listValue_new(timeStampT time) {
 
 void list_destroy(ListValue *head) {
     
-    ListValue * next;
-   /* while(head->next != head && head->timestamp != 0)
+    ListValue * next = head;
+    while(head->next != head && next != NULL)
     {
         next = head;
         head = head->next;
         free(next);
+        next = NULL;
     }
-   */
+
     if(head->timestamp != 0){
         free(head);
     }
@@ -606,7 +607,7 @@ bool Neighborhood_grow(Neighborhood *self, TimeSet *timeset, timeStampT *timesta
 int main(int argc, const char * argv[]) {
     
     //variable - can be commandLine Input
-    int arraySize =15;
+    int arraySize = 9;
     
     int treeNodeSize = 4;
     
@@ -618,13 +619,13 @@ int main(int argc, const char * argv[]) {
     BPlusTree * tree = BPlusTree_new(treeNodeSize);
     exampleShifts(tree, array);
     
-    // CircularArray * array2 = CircularArray_new(arraySize);
-    // initialize_data(array2);
+    CircularArray * array2 = CircularArray_new(arraySize);
+    initialize_data(array2);
     
     
     //create BplusTree;
-    // BPlusTree * tree2 = BPlusTree_new(treeNodeSize);
-    // random_shifts(tree2, array2);
+    BPlusTree * tree2 = BPlusTree_new(treeNodeSize);
+    random_shifts(tree2, array2);
     
     Measurement * newMeasurement = Measurement_new(3900, 50);
     int patternLength = 4;
@@ -643,14 +644,14 @@ int main(int argc, const char * argv[]) {
     Neighborhood_grow(newNeighborhood, timeSet, &foundTimestamp);
     
     
-    //   print_Neighborhood(newNeighborhood);
+    print_Neighborhood(newNeighborhood);
     
     TimeSet_destroy(&timeSet);
     BPlusTree_destroy(tree);
     Neighborhood_destroy(newNeighborhood);
     CircularArray_destroy(array);
-    // BPlusTree_destroy(tree2);
-    //   CircularArray_destroy(array2);
+    BPlusTree_destroy(tree2);
+    CircularArray_destroy(array2);
     
     return 0;
 }
@@ -1152,7 +1153,10 @@ void deleteFirstListValue(Node * leaf, int index){
     
     //always the first list value must be the oldest list value and
     // therefore the one that is deleted
+
+    
     free(firstListValue);
+
     
 }
 
@@ -1424,7 +1428,7 @@ void splitAndInsertIntoInnerNode(BPlusTree *tree, Node * oldInnerNode, int index
     
     //tempKeys and pointer are temporarly filled with up to nodesize + 1 keys
     tempKeys = malloc((tree->nodeSize +1) * sizeof(double));
-    tempPointers = malloc((tree->nodeSize+2) * sizeof(void *));
+    tempPointers = malloc((tree->nodeSize+2) * sizeof(Node));
     
     //fills the keys
     for (i = 0, j = 0; i < oldInnerNode->numOfKeys; i++, j++) {
@@ -1665,13 +1669,13 @@ void serie_update(BPlusTree *tree, CircularArray *array, timeStampT newTime, dou
             
         }
         
-        /*
+        
          printf("Elements in Serie:\n");
          for (int i = 0; i < array->size; i++) {
-         printf("%.2fl ", array->data[i].value);
+           printf("%fl ", array->data[i].value);
          }
          printf("\n");
-         */
+         
     }
 }
 
