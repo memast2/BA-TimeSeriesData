@@ -77,20 +77,22 @@ ListValue *listValue_new(timeStampT time) {
 
 void list_destroy(ListValue *head) {
     
+    ListValue * tail = head->prev;
     ListValue * next = head;
-    while(head->next != head && next != NULL)
+    //stimmt wahrscheinlich nicht so TODO
+    while(head != tail)
     {
         next = head;
         head = head->next;
         free(next);
-        next = NULL;
+        
+        if(head == tail){
+            break;
+        }
     }
-
-    if(head->timestamp != 0){
-        free(head);
-    }
+    
+    free(head);
 }
-
 
 /******************************STRUCTS - BPLUSTREE*******************************************************************/
 
@@ -129,7 +131,7 @@ Node *Leaf_new(int nodeSize){
     node->pointers = malloc((nodeSize) * sizeof(ListValue));
     node->next = NULL;
     node->prev = NULL;
-
+    
     return node;
 }
 
@@ -523,7 +525,7 @@ bool Neighborhood_grow(Neighborhood *self, TimeSet *timeset, timeStampT *timesta
     if(rightNeighborhoodPosition.timeStampPosition != NULL){
         offsetPlusTime = getOffsetTime(self, rightNeighborhoodPosition);
     }
-
+    
     
     if(leftNeighborhoodPosition.timeStampPosition != NULL && rightNeighborhoodPosition.timeStampPosition != NULL){
         printf("\ntminus %fl", (double) leftNeighborhoodPosition.timeStampPosition->timestamp);
@@ -607,7 +609,7 @@ bool Neighborhood_grow(Neighborhood *self, TimeSet *timeset, timeStampT *timesta
 int main(int argc, const char * argv[]) {
     
     //variable - can be commandLine Input
-    int arraySize = 9;
+    int arraySize = 12;
     
     int treeNodeSize = 4;
     
@@ -684,9 +686,9 @@ void random_shifts(BPlusTree * tree, CircularArray * array){
 }
 
 void exampleShifts(BPlusTree * tree, CircularArray * array){
-
-  shift(tree, array, 300, 300);
-  shift(tree, array, 600, 200);
+    
+    shift(tree, array, 300, 300);
+    shift(tree, array, 600, 200);
     shift(tree, array, 900, 600);
     
     shift(tree, array, 1200, 600);
@@ -702,9 +704,9 @@ void exampleShifts(BPlusTree * tree, CircularArray * array){
     shift(tree, array, 3300, 10);
     shift(tree, array, 3600, 20);
     shift(tree, array, 3900, 50);
-
+    
     shift(tree, array, 4200, 50);
-   
+    
     
     shift(tree, array, 4500, 60);
     printf("\n \n");
@@ -1153,10 +1155,10 @@ void deleteFirstListValue(Node * leaf, int index){
     
     //always the first list value must be the oldest list value and
     // therefore the one that is deleted
-
+    
     
     free(firstListValue);
-
+    
     
 }
 
@@ -1221,7 +1223,7 @@ void addRecordToTree(BPlusTree *tree, timeStampT time, double value){
         //leaf must be split
         splitAndInsertIntoLeaves(tree, leaf, time, value);
     }
-
+    
     
 }
 
@@ -1670,12 +1672,12 @@ void serie_update(BPlusTree *tree, CircularArray *array, timeStampT newTime, dou
         }
         
         
-         printf("Elements in Serie:\n");
-         for (int i = 0; i < array->size; i++) {
-           printf("%fl ", array->data[i].value);
-         }
-         printf("\n");
-         
+        printf("Elements in Serie:\n");
+        for (int i = 0; i < array->size; i++) {
+            printf("%fl ", array->data[i].value);
+        }
+        printf("\n");
+        
     }
 }
 
