@@ -1592,7 +1592,6 @@ void serie_update(BPlusTree *tree, CircularArray *array, timeStampT newTime, dou
     int newUpdatePosition;
     int length = array->size;
     int lastUpdatePosition = array->lastUpdatePosition;
-    timeStampT minAllowedTime = 0;
     bool changeLastUpdatePos = true;
     
     
@@ -1609,16 +1608,25 @@ void serie_update(BPlusTree *tree, CircularArray *array, timeStampT newTime, dou
     
     else{
         
+        timeStampT minAllowedTime = 0.0;
+        
         if(newTime > array->data[lastUpdatePosition].time){
             minAllowedTime = newTime - (array->size - 1) * TIMESTAMP_DIFF;
         }
         else{
             
             //values that arrive later
-            minAllowedTime = array->data[lastUpdatePosition].time - (array->size - 1) * TIMESTAMP_DIFF;
-            if(minAllowedTime >= newTime){
-                return;
+            printf("%lul\n",array->data[lastUpdatePosition].time);
+            if(minAllowedTime < (array->size - 1) * TIMESTAMP_DIFF){
+                minAllowedTime = 0;
             }
+            else{
+                minAllowedTime = array->data[lastUpdatePosition].time - (array->size - 1) * TIMESTAMP_DIFF;
+                if(minAllowedTime >= newTime){
+                    return;
+                }
+            }
+
         }
         
         int positionStep = (int)(newTime - array->data[lastUpdatePosition].time)/TIMESTAMP_DIFF;
@@ -1675,6 +1683,7 @@ void serie_update(BPlusTree *tree, CircularArray *array, timeStampT newTime, dou
         printf("Elements in Serie:\n");
         for (int i = 0; i < array->size; i++) {
             printf("%fl ", array->data[i].value);
+            printf("%lul ", array->data[i].time);
         }
         printf("\n");
         
