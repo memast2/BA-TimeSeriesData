@@ -37,14 +37,16 @@ typedef struct CircularArray{
     Serie * data;
     int size;
     int lastUpdatePosition;
+    int count;
 }CircularArray;
 
 CircularArray *CircularArray_new(int size) {
     CircularArray *array = NULL;
     array = malloc(sizeof(CircularArray));
     array->size = size;
-    array->lastUpdatePosition = -1;
+    array->lastUpdatePosition = 0;
     array->data = malloc(array->size * sizeof(Serie));
+    array->count = 0;
     return array;
 }
 
@@ -220,7 +222,6 @@ void shift(BPlusTree *tree, CircularArray *array, timeStampT time, double value)
 bool lookup(CircularArray *array, timeStampT t, double *value);
 void printArray(CircularArray * array, int arraySize);
 void serie_update(BPlusTree *tree, CircularArray *array, timeStampT t, double value);
-void initialize_data(CircularArray *array);
 
 /*************************************** NEIGHBOUR *******************************************/
 timeStampT neighbor(BPlusTree *tree, double value, TimeSet * set);
@@ -615,19 +616,16 @@ int main(int argc, const char * argv[]) {
     
     
     CircularArray * array = CircularArray_new(arraySize);
-    initialize_data(array);
     
     //create BplusTree;
     BPlusTree * tree = BPlusTree_new(treeNodeSize);
     exampleShifts(tree, array);
     
-    CircularArray * array2 = CircularArray_new(arraySize);
-    initialize_data(array2);
-    
+   // CircularArray * array2 = CircularArray_new(arraySize);
     
     //create BplusTree;
-    BPlusTree * tree2 = BPlusTree_new(treeNodeSize);
-    random_shifts(tree2, array2);
+ //   BPlusTree * tree2 = BPlusTree_new(treeNodeSize);
+  //  random_shifts(tree2, array2);
     
     Measurement * newMeasurement = Measurement_new(3900, 50);
     int patternLength = 4;
@@ -645,6 +643,14 @@ int main(int argc, const char * argv[]) {
     Neighborhood_grow(newNeighborhood, timeSet, &foundTimestamp);
     Neighborhood_grow(newNeighborhood, timeSet, &foundTimestamp);
     
+    double value = -1;
+    bool x = false;
+    
+    x = lookup(array, 3900, &value);
+    
+    printf("bool: %d\n", x);
+    printf("value: %fl\n", value);
+    
     
     print_Neighborhood(newNeighborhood);
     
@@ -652,8 +658,8 @@ int main(int argc, const char * argv[]) {
     BPlusTree_destroy(tree);
     Neighborhood_destroy(newNeighborhood);
     CircularArray_destroy(array);
-    BPlusTree_destroy(tree2);
-    CircularArray_destroy(array2);
+ //   BPlusTree_destroy(tree2);
+  //  CircularArray_destroy(array2);
     
     return 0;
 }
@@ -695,10 +701,11 @@ void exampleShifts(BPlusTree * tree, CircularArray * array){
     shift(tree, array, 1500, 1200);
     
     shift(tree, array, 1800, 1500);
-    shift(tree, array, 2700, 2100);
     //arrive late
     shift(tree, array, 2100, 300);
     shift(tree, array, 2400, 900);
+    shift(tree, array, 2700, 2100);
+
     
     shift(tree, array, 3000, 0);
     shift(tree, array, 3300, 10);
@@ -1588,118 +1595,50 @@ void printArray(CircularArray * array, int arraySize){
 /************************************* CIRCULAR ARRAY ********************************************/
 
 void serie_update(BPlusTree *tree, CircularArray *array, timeStampT newTime, double newValue){
+  
+    int newUpdatePosition = 0;
     
-    int newUpdatePosition;
-    int length = array->size;
-    int lastUpdatePosition = array->lastUpdatePosition;
-    bool changeLastUpdatePos = true;
-    
-    
-    //because after a position cannot be negative
-    if(array->lastUpdatePosition < 0){
-        //Nothing has been added to the circularArray yet
-        array->data[0].value = newValue;
-        array->data[0].time = newTime;
-        array->lastUpdatePosition = 0;
-        
-        addRecordToTree(tree, newTime, newValue);
-        
+    if(array->count < array->size){
+        if(array->count != 0){
+            newUpdatePosition = (array->lastUpdatePosition + 1) %array->size;
+        }
+        array->count++;
     }
-    
     else{
-        
-        timeStampT minAllowedTime = 0.0;
-        
-        if(newTime > array->data[lastUpdatePosition].time){
-            minAllowedTime = newTime - (array->size - 1) * TIMESTAMP_DIFF;
-        }
-        else{
-            
-            //values that arrive later
-            printf("%lul\n",array->data[lastUpdatePosition].time);
-            if(minAllowedTime < (array->size - 1) * TIMESTAMP_DIFF){
-                minAllowedTime = 0;
-            }
-            else{
-                minAllowedTime = array->data[lastUpdatePosition].time - (array->size - 1) * TIMESTAMP_DIFF;
-                if(minAllowedTime >= newTime){
-                    return;
-                }
-            }
+        newUpdatePosition = (array->lastUpdatePosition + 1) %array->size;
+        delete(tree, array->data[newUpdatePosition].time, array->data[newUpdatePosition].value);
 
-        }
-        
-        int positionStep = (int)(newTime - array->data[lastUpdatePosition].time)/TIMESTAMP_DIFF;
-        
-        //debug
-        //printf("last Update Pos was: %d\n", lastUpdatePosition);
-        
-        int i = 1;
-        if(positionStep < 0){
-            i = positionStep;
-            //old value is inserted
-            changeLastUpdatePos = false;
-        }
-        
-        for (;i < positionStep+1; i++) {
-            
-            int nextUpdatePosition = (lastUpdatePosition+i)%length;
-            double value = array->data[nextUpdatePosition].value;
-            timeStampT curTime = array->data[nextUpdatePosition].time;
-            
-            //checks if the time is in the range of the circular Array after the new value is inserted to it
-            // curTime is not always < minAllowedTime; minTime is the minimumAllowed Time which can stay in the serie, The other entries have to be deleted
-            if(curTime < minAllowedTime && isfinite(value)){
-                
-                delete(tree, curTime, value);
-                
-                array->data[nextUpdatePosition].value = INFINITY;
-                array->data[nextUpdatePosition].time = INFINITY;
-            }
-            
-            newUpdatePosition = (lastUpdatePosition + positionStep)%length;
-            
-            if(isfinite(array->data[newUpdatePosition].value)){
-                
-                timeStampT timeDelete = array->data[newUpdatePosition].time;
-                double valueDelete = array->data[newUpdatePosition].value;
-                
-                delete(tree, timeDelete, valueDelete);
-                
-            }
-            
-            array->data[newUpdatePosition].time = newTime;
-            array->data[newUpdatePosition].value = newValue;
-            
-            if(changeLastUpdatePos){
-                array->lastUpdatePosition = newUpdatePosition;
-            }
-            
-            addRecordToTree(tree, newTime, newValue);
-            
-        }
-        
-        
-        printf("Elements in Serie:\n");
-        for (int i = 0; i < array->size; i++) {
-            printf("%fl ", array->data[i].value);
-            printf("%lul ", array->data[i].time);
-        }
-        printf("\n");
-        
     }
+
+    array->data[newUpdatePosition].time = newTime;
+    array->data[newUpdatePosition].value = newValue;
+    array->lastUpdatePosition = newUpdatePosition;
+
+    addRecordToTree(tree, newTime, newValue);
+    
+    printf("Elements in Serie:\n");
+    for (int i = 0; i < array->size; i++) {
+        printf("%fl ", array->data[i].value);
+    }
+    printf("\n");
+
+
+    
 }
 
 bool lookup(CircularArray *array, timeStampT t, double *value){
     
-    //means array has min one record
-    if(array->lastUpdatePosition>=0){
-        
-        //vom letzten Zeitpunkt ausgehen!!!
-        int step = (int)(t - array->data[array->lastUpdatePosition].time)/TIMESTAMP_DIFF;
+    if(array->count == 0){
+        return false;
+    }
+
+    //vom letzten Zeitpunkt ausgehen!!!
+    int step = (int)(t - array->data[array->lastUpdatePosition].time)/TIMESTAMP_DIFF;
+    
+    if(abs(step) < array->count){
         //chaining : modulo for negative numbers
         int pos = (((array->lastUpdatePosition+step)%array->size)+array->size)%array->size;
-        
+
         if(array->data[pos].time == t){
             *value = array->data[pos].value;
             return true;
@@ -1709,11 +1648,3 @@ bool lookup(CircularArray *array, timeStampT t, double *value){
     return false;
 }
 
-void initialize_data(CircularArray *array){
-    
-    for (int i = 0;i< array->size; i++) {
-        array->data[i].time = INFINITY;
-        array->data[i].value = INFINITY;
-    }
-    
-}
