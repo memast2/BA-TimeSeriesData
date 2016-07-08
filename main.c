@@ -17,7 +17,7 @@
 
 
 #define TIMESTAMP_DIFF 300
-
+//#define DEBUG_PRINT
 
 //t = type
 typedef unsigned long timeStampT;
@@ -81,7 +81,6 @@ void list_destroy(ListValue *head) {
     
     ListValue * tail = head->prev;
     ListValue * next = head;
-    //stimmt wahrscheinlich nicht so TODO
     while(head != tail)
     {
         next = head;
@@ -118,7 +117,7 @@ Node * Node_new(int nodeSize){
     node->numOfKeys = 0;
     //always n+1 pointers
     node->isLeaf = false;
-    node->pointers = malloc((nodeSize + 1) * sizeof(Node));
+    node->pointers = malloc((nodeSize + 1) * sizeof(void *));
     node->next = NULL;
     node->prev = NULL;
     return node;
@@ -130,7 +129,7 @@ Node *Leaf_new(int nodeSize){
     node->numOfKeys = 0;
     //always n pointers
     node->isLeaf = true;
-    node->pointers = malloc((nodeSize) * sizeof(ListValue));
+    node->pointers = malloc((nodeSize) * sizeof(void *));
     node->next = NULL;
     node->prev = NULL;
     
@@ -321,32 +320,15 @@ Neighborhood *Neighborhood_new(BPlusTree *tree, Measurement *measurement,int pat
     
     ListValue *listValueOnThatKey = NULL;
     listValueOnThatKey = leafNode->pointers[pointerIndex];
-    
-    if(!listValueOnThatKey){
-        printf("value was not found");
-        return NULL;
+
+    //The value will be at most patternLength away
+    int maxSteps = patternLength;
+    while(listValueOnThatKey->timestamp != measurement->timestamp && maxSteps != 0){
+        //go from newest value back towards oldest
+        listValueOnThatKey = listValueOnThatKey->prev;
+        maxSteps--;
     }
     
-    /*
-     * @Feedback
-     * Can you do this more efficiently? Imagine the list has 1000
-     * entries, how many values would you likely traverse with this
-     * while loop? Does the pattern length have an influence here?
-     */
-    //TODO
-    ListValue *oldestTimeInList = listValueOnThatKey;
-    
-    //is difference to oldest timestamp bigger than to newest timestamp in the list
-    if((oldestTimeInList->timestamp) - measurement->timestamp >= (measurement->timestamp - oldestTimeInList->prev->timestamp)){
-        while(listValueOnThatKey->timestamp != measurement->timestamp){
-            listValueOnThatKey = listValueOnThatKey->prev;
-        }
-    }
-    else{
-        while(listValueOnThatKey->timestamp != measurement->timestamp){
-            listValueOnThatKey = listValueOnThatKey->next;
-        }
-    }
     leftNeighbourhoodPos.indexPosition = pointerIndex;
     leftNeighbourhoodPos.LeafPosition = leafNode;
     leftNeighbourhoodPos.timeStampPosition = listValueOnThatKey;
@@ -514,8 +496,8 @@ bool Neighborhood_grow(Neighborhood *self, TimeSet *timeset, timeStampT *timesta
     
     bool neighborHoodHasGrown = true;
     
-    timeStampT offsetMinusTime = INFINITY;
-    timeStampT offsetPlusTime = INFINITY;
+    timeStampT offsetMinusTime = -1;
+    timeStampT offsetPlusTime = -1;
     
     leftNeighborhoodPosition = getTMinusNeighborHoodPosition(leftNeighborhoodPosition);
     if(leftNeighborhoodPosition.timeStampPosition != NULL){
@@ -527,6 +509,7 @@ bool Neighborhood_grow(Neighborhood *self, TimeSet *timeset, timeStampT *timesta
         offsetPlusTime = getOffsetTime(self, rightNeighborhoodPosition);
     }
     
+#ifdef DEBUG_PRINT
     
     if(leftNeighborhoodPosition.timeStampPosition != NULL && rightNeighborhoodPosition.timeStampPosition != NULL){
         printf("\ntminus %fl", (double) leftNeighborhoodPosition.timeStampPosition->timestamp);
@@ -535,35 +518,31 @@ bool Neighborhood_grow(Neighborhood *self, TimeSet *timeset, timeStampT *timesta
         printf("\noffsetTMinus %fl", (double) offsetMinusTime);
         printf("\noffsetPlusTime %fl", (double) offsetPlusTime);
     }
-    
-    
+
+#endif
     
     //checks if offsetTime is in timestamp set
     while(leftNeighborhoodPosition.timeStampPosition != NULL && TimeSet_contains(timeset, offsetMinusTime)){
-        
         leftNeighborhoodPosition = getTMinusNeighborHoodPosition(leftNeighborhoodPosition);
         offsetMinusTime = getOffsetTime(self, leftNeighborhoodPosition);
-        printf("\noffsetTMinus %fl", (double) offsetMinusTime);
+        
+        //next time doesnt have to check this position again
+        self->leftPosition = leftNeighborhoodPosition;
     }
     
     while(rightNeighborhoodPosition.timeStampPosition != NULL && TimeSet_contains(timeset, offsetPlusTime)){
-        
         rightNeighborhoodPosition = getTPlusNeighborHoodPosition(rightNeighborhoodPosition);
         offsetPlusTime = getOffsetTime(self, rightNeighborhoodPosition);
-        printf("\noffsetPlusTime %fl", (double) offsetPlusTime);
+        
+        //next time doesnt have to check this position again
+        self->rightPosition = rightNeighborhoodPosition;
     }
     
-    
+
     
     
     if(leftNeighborhoodPosition.timeStampPosition != NULL && rightNeighborhoodPosition.timeStampPosition != NULL){
         
-        /*
-         * @Feedback
-         * If you reached the leftmost/rightmost position this couldn't exist?
-         
-         * @Solution I inserted the differences into the if and not like before outside
-         */
         long tMinusdifference = fabs(leftNeighborhoodPosition.LeafPosition->keys[leftNeighborhoodPosition.indexPosition] - self->key);
         long tPlusdifference = fabs(rightNeighborhoodPosition.LeafPosition->keys[rightNeighborhoodPosition.indexPosition] - self->key);
         
@@ -594,10 +573,10 @@ bool Neighborhood_grow(Neighborhood *self, TimeSet *timeset, timeStampT *timesta
         neighborHoodHasGrown = false;
     }
     
-    
+#ifdef DEBUG_PRINT
     printf("\ntfound %fl\n", (double) *timestamp);
     
-    
+#endif
     //offset timestamp will be added later
     
     return neighborHoodHasGrown;
@@ -614,18 +593,17 @@ int main(int argc, const char * argv[]) {
     
     int treeNodeSize = 4;
     
-    
     CircularArray * array = CircularArray_new(arraySize);
     
     //create BplusTree;
     BPlusTree * tree = BPlusTree_new(treeNodeSize);
     exampleShifts(tree, array);
     
-   // CircularArray * array2 = CircularArray_new(arraySize);
+    CircularArray * array2 = CircularArray_new(arraySize);
     
     //create BplusTree;
- //   BPlusTree * tree2 = BPlusTree_new(treeNodeSize);
-  //  random_shifts(tree2, array2);
+    BPlusTree * tree2 = BPlusTree_new(treeNodeSize);
+    random_shifts(tree2, array2);
     
     Measurement * newMeasurement = Measurement_new(3900, 50);
     int patternLength = 4;
@@ -648,18 +626,22 @@ int main(int argc, const char * argv[]) {
     
     x = lookup(array, 3900, &value);
     
+#ifdef DEBUG_PRINT
+    
     printf("bool: %d\n", x);
     printf("value: %fl\n", value);
     
     
     print_Neighborhood(newNeighborhood);
+
+#endif
     
     TimeSet_destroy(&timeSet);
     BPlusTree_destroy(tree);
     Neighborhood_destroy(newNeighborhood);
     CircularArray_destroy(array);
- //   BPlusTree_destroy(tree2);
-  //  CircularArray_destroy(array2);
+    BPlusTree_destroy(tree2);
+    CircularArray_destroy(array2);
     
     return 0;
 }
@@ -680,14 +662,14 @@ void random_shifts(BPlusTree * tree, CircularArray * array){
     for (int i = 0; i < 500; ++i) {
         time += TIMESTAMP_DIFF;
         double rand_value = rand() % 10;
-        //printf("inserting time: %ld, value: %f\n", time, rand_value);
         shift(tree, array, time, rand_value);
     }
-    
+#ifdef DEBUG_PRINT
     printf("\n \n");
     
     
     printLevelOrder(tree->root);
+#endif
     
 }
 
@@ -705,7 +687,7 @@ void exampleShifts(BPlusTree * tree, CircularArray * array){
     shift(tree, array, 2100, 300);
     shift(tree, array, 2400, 900);
     shift(tree, array, 2700, 2100);
-
+    
     
     shift(tree, array, 3000, 0);
     shift(tree, array, 3300, 10);
@@ -716,11 +698,14 @@ void exampleShifts(BPlusTree * tree, CircularArray * array){
     
     
     shift(tree, array, 4500, 60);
+    
+#ifdef DEBUG_PRINT
     printf("\n \n");
     
     
     printLevelOrder(tree->root);
-    
+
+#endif
     
 }
 
@@ -1048,10 +1033,10 @@ void delete(BPlusTree *tree, timeStampT time, double value){
     
     leaf = findLeaf(tree, value);
     
-    int positionOfKey = INFINITY;
+    int positionOfKey = -1;
     positionOfKey = findLeafKeyIndexAndSetboolIfMultipleListValues(leaf, value, &hasMultipleTimes);
     
-    if(isfinite(positionOfKey)){
+    if(positionOfKey >= 0){
         
         //key has duplicates --> delete first value ind doubly linked list
         if(hasMultipleTimes){
@@ -1076,6 +1061,10 @@ Node * removeEntryFromTheNode(BPlusTree *tree, Node * node, double toDelete, Nod
     
     while (node->keys[i] != toDelete){
         i++;
+    }
+    
+    if(node->isLeaf){
+        free(node->pointers[i]);
     }
     
     for (++i; i < node->numOfKeys; i++){
@@ -1143,7 +1132,7 @@ int findLeafKeyIndexAndSetboolIfMultipleListValues(Node * node, double key, bool
         }
     }
     
-    return INFINITY;
+    return -1;
     
 }
 
@@ -1162,8 +1151,7 @@ void deleteFirstListValue(Node * leaf, int index){
     
     //always the first list value must be the oldest list value and
     // therefore the one that is deleted
-    
-    
+
     free(firstListValue);
     
     
@@ -1595,7 +1583,7 @@ void printArray(CircularArray * array, int arraySize){
 /************************************* CIRCULAR ARRAY ********************************************/
 
 void serie_update(BPlusTree *tree, CircularArray *array, timeStampT newTime, double newValue){
-  
+    
     int newUpdatePosition = 0;
     
     if(array->count < array->size){
@@ -1607,22 +1595,14 @@ void serie_update(BPlusTree *tree, CircularArray *array, timeStampT newTime, dou
     else{
         newUpdatePosition = (array->lastUpdatePosition + 1) %array->size;
         delete(tree, array->data[newUpdatePosition].time, array->data[newUpdatePosition].value);
-
+        
     }
-
+    
     array->data[newUpdatePosition].time = newTime;
     array->data[newUpdatePosition].value = newValue;
     array->lastUpdatePosition = newUpdatePosition;
-
-    addRecordToTree(tree, newTime, newValue);
     
-    printf("Elements in Serie:\n");
-    for (int i = 0; i < array->size; i++) {
-        printf("%fl ", array->data[i].value);
-    }
-    printf("\n");
-
-
+    addRecordToTree(tree, newTime, newValue);
     
 }
 
@@ -1631,14 +1611,14 @@ bool lookup(CircularArray *array, timeStampT t, double *value){
     if(array->count == 0){
         return false;
     }
-
+    
     //vom letzten Zeitpunkt ausgehen!!!
     int step = (int)(t - array->data[array->lastUpdatePosition].time)/TIMESTAMP_DIFF;
     
     if(abs(step) < array->count){
         //chaining : modulo for negative numbers
         int pos = (((array->lastUpdatePosition+step)%array->size)+array->size)%array->size;
-
+        
         if(array->data[pos].time == t){
             *value = array->data[pos].value;
             return true;
