@@ -84,9 +84,6 @@ void list_destroy(ListValue *head) {
         head = head->next;
         free(next);
         
-        if(head == tail){
-            break;
-        }
     }
     
     free(head);
@@ -317,7 +314,7 @@ Neighborhood *Neighborhood_new(BPlusTree *tree, Measurement *measurement,int pat
     
     ListValue *listValueOnThatKey = NULL;
     listValueOnThatKey = leafNode->pointers[pointerIndex];
-
+    
     //The value will be at most patternLength away
     int maxSteps = patternLength;
     while(listValueOnThatKey->timestamp != measurement->timestamp && maxSteps != 0){
@@ -515,7 +512,7 @@ bool Neighborhood_grow(Neighborhood *self, TimeSet *timeset, timeStampT *timesta
         printf("\noffsetTMinus %fl", (double) offsetMinusTime);
         printf("\noffsetPlusTime %fl", (double) offsetPlusTime);
     }
-
+    
 #endif
     
     //checks if offsetTime is in timestamp set
@@ -535,7 +532,7 @@ bool Neighborhood_grow(Neighborhood *self, TimeSet *timeset, timeStampT *timesta
         self->rightPosition = rightNeighborhoodPosition;
     }
     
-
+    
     
     
     if(leftNeighborhoodPosition.timeStampPosition != NULL && rightNeighborhoodPosition.timeStampPosition != NULL){
@@ -630,7 +627,7 @@ int main(int argc, const char * argv[]) {
     
     
     print_Neighborhood(newNeighborhood);
-
+    
 #endif
     
     TimeSet_destroy(&timeSet);
@@ -701,7 +698,7 @@ void exampleShifts(BPlusTree * tree, CircularArray * array){
     
     
     printLevelOrder(tree->root);
-
+    
 #endif
     
 }
@@ -1149,7 +1146,7 @@ void deleteFirstListValue(Node * leaf, int index){
     
     //always the first list value must be the oldest list value and
     // therefore the one that is deleted
-
+    
     free(firstListValue);
     
     
