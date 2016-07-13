@@ -581,7 +581,7 @@ bool Neighborhood_grow(Neighborhood *self, TimeSet *timeset, timeStampT *timesta
 int main(int argc, const char * argv[]) {
     
     //variable - can be commandLine Input
-    int arraySize = 12;
+    int arraySize = 20;
     
     int treeNodeSize = 4;
     
@@ -653,7 +653,7 @@ void random_shifts(BPlusTree * tree, CircularArray * array){
     timeStampT time = 0;
     for (int i = 0; i < 500; ++i) {
         time += TIMESTAMP_DIFF;
-        double rand_value = rand() % 10;
+        double rand_value = rand() % 50;
         shift(tree, array, time, rand_value);
     }
 #ifdef DEBUG_PRINT
@@ -849,7 +849,7 @@ void redestributeNodes(BPlusTree * tree, Node * node, Node * neighbor, int neigh
             neighbor->pointers[neighbor->numOfKeys] = NULL;
             node->keys[0] = kPrime;
             
-            node->parent->keys[kIndex] = node->keys[0];
+            node->parent->keys[kIndex] = neighbor->keys[neighbor->numOfKeys-1];
             
         }
         else {
@@ -867,8 +867,6 @@ void redestributeNodes(BPlusTree * tree, Node * node, Node * neighbor, int neigh
     else {
         if (node->isLeaf) {
             node->keys[node->numOfKeys] = neighbor->keys[0];
-            
-            //ADD
             node->pointers[node->numOfKeys] = neighbor->pointers[0];
             
             node->parent->keys[kIndex] = neighbor->keys[1];
