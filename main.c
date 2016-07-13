@@ -482,8 +482,8 @@ timeStampT getOffsetTime(Neighborhood * self, NeighborhoodPosition neighborhoodP
 
 bool Neighborhood_grow(Neighborhood *self, TimeSet *timeset, timeStampT *timestamp){
     
-    NeighborhoodPosition leftNeighborhoodPosition = leftNeighborhoodPosition = self->leftPosition;
-    NeighborhoodPosition rightNeighborhoodPosition = rightNeighborhoodPosition = self->rightPosition;
+    NeighborhoodPosition leftNeighborhoodPosition = self->leftPosition;
+    NeighborhoodPosition rightNeighborhoodPosition = self->rightPosition;
     
     
     bool neighborHoodHasGrown = true;
