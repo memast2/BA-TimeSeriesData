@@ -15,7 +15,7 @@
 
 
 #define TIMESTAMP_DIFF 300
-//#define DEBUG_PRINT
+#define DEBUG_PRINT
 
 //t = type
 typedef unsigned long timeStampT;
@@ -27,8 +27,6 @@ typedef struct Serie{
     timeStampT time;
     double value;
 }Serie;
-
-
 
 typedef struct CircularArray{
     Serie * data;
@@ -771,11 +769,12 @@ void deleteEntry(BPlusTree *tree, Node *node, double toDelete, Node * pointer){
         return;
     }
     
-    // deletion from a innernode or leaf
+    // deletion from a innernode or leaf-> (n-1/2)
     if(node->isLeaf){
         minNumberofKeys = getSplitPoint(tree->nodeSize);
     }
     else{
+        //n/2 - 1
         minNumberofKeys = getSplitPoint(tree->nodeSize + 1) - 1;
     }
     
@@ -850,14 +849,12 @@ void redestributeNodes(BPlusTree * tree, Node * node, Node * neighbor, int neigh
             neighbor->pointers[neighbor->numOfKeys] = NULL;
             node->keys[0] = kPrime;
             
-            //clear reason
-            node->parent->keys[kIndex] = neighbor->keys[neighbor->numOfKeys-1];
+            node->parent->keys[kIndex] = node->keys[0];
             
         }
         else {
             
             node->keys[0] = neighbor->keys[neighbor->numOfKeys - 1];
-            //ADD
             node->pointers[0] = neighbor->pointers[neighbor->numOfKeys - 1];
             
             node->parent->keys[kIndex] = node->keys[0];
@@ -885,9 +882,7 @@ void redestributeNodes(BPlusTree * tree, Node * node, Node * neighbor, int neigh
         }
         for (i = 0; i < neighbor->numOfKeys - 1; i++) {
             neighbor->keys[i] = neighbor->keys[i + 1];
-            // if(!node->isLeaf){
             neighbor->pointers[i] = neighbor->pointers[i + 1];
-            //  }
         }
         if (!node->isLeaf){
             neighbor->pointers[i] = neighbor->pointers[i + 1];
@@ -1349,10 +1344,6 @@ void splitAndInsertIntoLeaves(BPlusTree *tree, Node *oldNode, timeStampT time, d
     free(tempPointers);
     
     insertIntoParent(tree, oldNode, keyForParent, newNode);
-    
-    
-    
-    
     
 }
 
