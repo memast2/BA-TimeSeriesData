@@ -10,6 +10,9 @@
 #include <math.h>
 #include <stddef.h>
 #include "timeset.c"
+#include <string.h>
+#include <sys/time.h>
+
 
 /******************************TIMESTAMP DEF********************************************/
 
@@ -575,65 +578,84 @@ bool Neighborhood_grow(Neighborhood *self, TimeSet *timeset, timeStampT *timesta
     
 }
 
+const char* getfield(char* line, int num)
+{
+    const char* tok;
+    for (tok = strtok(line, ";");
+         tok && *tok;
+         tok = strtok(NULL, ";\n"))
+    {
+        if (!--num)
+            return tok;
+    }
+    return NULL;
+}
+
+float timedifference_msec(struct timeval t0, struct timeval t1)
+{
+    return (t1.tv_sec - t0.tv_sec) * 1000.0f + (t1.tv_usec - t0.tv_usec) / 1000.0f;
+}
+
 
 /****************************** METHODS *******************************************************************/
 
 int main(int argc, const char * argv[]) {
     
-    //variable - can be commandLine Input
-    int arraySize = 20;
-    
-    int treeNodeSize = 4;
-    
-    CircularArray * array = CircularArray_new(arraySize);
-    
-    //create BplusTree;
-    BPlusTree * tree = BPlusTree_new(treeNodeSize);
-    exampleShifts(tree, array);
-    
-    CircularArray * array2 = CircularArray_new(arraySize);
-    
-    //create BplusTree;
-    BPlusTree * tree2 = BPlusTree_new(treeNodeSize);
-    random_shifts(tree2, array2);
-    
-    Measurement * newMeasurement = Measurement_new(3900, 50);
-    int patternLength = 4;
-    int offset = 2;
-    Neighborhood *newNeighborhood = Neighborhood_new(tree, newMeasurement, patternLength, offset);
-    
-    Measurement_destroy(newMeasurement);
-    timeStampT foundTimestamp = -1;
-    
-    TimeSet *timeSet = TimeSet_new();
-    TimeSet_add(timeSet, 3900);
+    FILE *fp;
+    double value;
+    unsigned long t;
     
     
-    Neighborhood_grow(newNeighborhood, timeSet, &foundTimestamp);
-    Neighborhood_grow(newNeighborhood, timeSet, &foundTimestamp);
-    Neighborhood_grow(newNeighborhood, timeSet, &foundTimestamp);
+    struct timeval t0;
+    struct timeval t1;
+    float elapsed;
     
-    double value = -1;
-    bool x = false;
+    FILE *fp2;
     
-    x = lookup(array, 3900, &value);
+    fp2 = fopen("results_tree_w.txt", "w");
+    int treeNodeSize = 20;
     
-#ifdef DEBUG_PRINT
+    for(int i = 28800; i<=525600;){
+        //3 years
+        int arraySize = i;
+        fp = fopen("datenset.txt", "r");
+        
+        //const char * nodeSize = argv[1];
+        // int treeNodeSize = atoi(nodeSize);
+        
+        CircularArray * array = CircularArray_new(arraySize);
+        BPlusTree * tree = BPlusTree_new(treeNodeSize);
+        
+        gettimeofday(&t0, 0);
+        
+        for(int i=0; i<17520000; i++) {
+            fscanf(fp, "%lfl, %lul\n", &value, &t);
+            shift(tree, array, t, value);
+        }
+        fclose(fp);
+        
+        gettimeofday(&t1, 0);
+        
+        elapsed = timedifference_msec(t0, t1);
+        
+        printf("Code executed in %f milliseconds.\n", elapsed);
+        
+        printf("WindowSize: %d\n", arraySize);
+        
+        fprintf(fp2, "%dl, %fl\n", arraySize, elapsed);
+        printf("Zahlen wurden geschrieben.\n");
+        
+        i = i+10000;
+        
+        BPlusTree_destroy(tree);
+        CircularArray_destroy(array);
+        
+    }
     
-    printf("bool: %d\n", x);
-    printf("value: %fl\n", value);
+    fclose(fp2);
     
     
-    print_Neighborhood(newNeighborhood);
     
-#endif
-    
-    TimeSet_destroy(&timeSet);
-    BPlusTree_destroy(tree);
-    Neighborhood_destroy(newNeighborhood);
-    CircularArray_destroy(array);
-    BPlusTree_destroy(tree2);
-    CircularArray_destroy(array2);
     
     return 0;
 }
@@ -942,7 +964,6 @@ void mergeNodes(BPlusTree *tree, Node *node, Node *neighbor, int neighborIndex, 
         }
     }
     // a leaf, append the keys and pointers of the node to the neighbor.
-    //Set the neighbor's last pointer to point to what had been the node's right neighbor.
     else
     {
         
@@ -1147,7 +1168,8 @@ void deleteFirstListValue(Node * leaf, int index){
 
 /************************************* COMMONLY USED METHODS **************************************/
 
-Node * findLeaf(BPlusTree *tree, double newKey){
+Node * findLeaf
+(BPlusTree *tree, double newKey){
     int i = 0;
     
     Node * curNode = tree->root;
